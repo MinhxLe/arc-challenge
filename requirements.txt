@@ -1,5 +1,6 @@
 # arc
-arc>=0.1.0
+arckit>=0.1.0
+drawsvg[all]
 
 # development
 pre-commit
