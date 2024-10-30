@@ -3,6 +3,7 @@ arckit>=0.1.0
 drawsvg[all]
 
 # development
+pytest
 pre-commit
 ruff>=0.7.1
 pyright>=1.1.386
