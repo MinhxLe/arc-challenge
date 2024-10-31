@@ -1,4 +1,26 @@
-from arc_types import *
+# type: ignore
+"""
+copied from https://github.com/michaelhodel/arc-dsl
+"""
+
+from arc.dsl.types import (
+    Boolean,
+    Integer,
+    IntegerTuple,
+    Numerical,
+    IntegerSet,
+    Grid,
+    Object,
+    Objects,
+    Indices,
+    Patch,
+    Element,
+    Piece,
+    TupleTuple,
+    ContainerContainer,
+    Container,
+)
+from typing import Any, FrozenSet, Tuple, Callable
 
 
 def identity(x: Any) -> Any:
