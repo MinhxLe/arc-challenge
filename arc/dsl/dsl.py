@@ -7,7 +7,6 @@ from arc.dsl.types import (
     Boolean,
     Integer,
     IntegerTuple,
-    Numerical,
     IntegerSet,
     Grid,
     Object,
@@ -28,7 +27,7 @@ def identity(x: Any) -> Any:
     return x
 
 
-def add(a: Numerical, b: Numerical) -> Numerical:
+def add_int(a: Integer, b: Integer) -> Integer:
     """addition"""
     if isinstance(a, int) and isinstance(b, int):
         return a + b
@@ -39,7 +38,7 @@ def add(a: Numerical, b: Numerical) -> Numerical:
     return (a[0] + b, a[1] + b)
 
 
-def subtract(a: Numerical, b: Numerical) -> Numerical:
+def subtract_int(a: Integer, b: Integer) -> Integer:
     """subtraction"""
     if isinstance(a, int) and isinstance(b, int):
         return a - b
@@ -50,7 +49,7 @@ def subtract(a: Numerical, b: Numerical) -> Numerical:
     return (a[0] - b, a[1] - b)
 
 
-def multiply(a: Numerical, b: Numerical) -> Numerical:
+def multiply_int(a: Integer, b: Integer) -> Integer:
     """multiplication"""
     if isinstance(a, int) and isinstance(b, int):
         return a * b
@@ -61,7 +60,7 @@ def multiply(a: Numerical, b: Numerical) -> Numerical:
     return (a[0] * b, a[1] * b)
 
 
-def divide(a: Numerical, b: Numerical) -> Numerical:
+def divide_int(a: Integer, b: Integer) -> Integer:
     """floor division"""
     if isinstance(a, int) and isinstance(b, int):
         return a // b
@@ -72,7 +71,71 @@ def divide(a: Numerical, b: Numerical) -> Numerical:
     return (a[0] // b, a[1] // b)
 
 
-def invert(n: Numerical) -> Numerical:
+def invert_int(n: Integer) -> Integer:
+    """inversion with respect to addition"""
+    return -n if isinstance(n, int) else (-n[0], -n[1])
+
+
+def even_int(n: Integer) -> Boolean:
+    """evenness"""
+    return n % 2 == 0
+
+
+def double_int(n: Integer) -> Integer:
+    """scaling by two"""
+    return n * 2 if isinstance(n, int) else (n[0] * 2, n[1] * 2)
+
+
+def halve_int(n: Integer) -> Integer:
+    """scaling by one half"""
+    return n // 2 if isinstance(n, int) else (n[0] // 2, n[1] // 2)
+
+
+def add(a: IntegerTuple, b: IntegerTuple) -> IntegerTuple:
+    """addition"""
+    if isinstance(a, int) and isinstance(b, int):
+        return a + b
+    elif isinstance(a, tuple) and isinstance(b, tuple):
+        return (a[0] + b[0], a[1] + b[1])
+    elif isinstance(a, int) and isinstance(b, tuple):
+        return (a + b[0], a + b[1])
+    return (a[0] + b, a[1] + b)
+
+
+def subtract(a: IntegerTuple, b: IntegerTuple) -> IntegerTuple:
+    """subtraction"""
+    if isinstance(a, int) and isinstance(b, int):
+        return a - b
+    elif isinstance(a, tuple) and isinstance(b, tuple):
+        return (a[0] - b[0], a[1] - b[1])
+    elif isinstance(a, int) and isinstance(b, tuple):
+        return (a - b[0], a - b[1])
+    return (a[0] - b, a[1] - b)
+
+
+def multiply(a: IntegerTuple, b: IntegerTuple) -> IntegerTuple:
+    """multiplication"""
+    if isinstance(a, int) and isinstance(b, int):
+        return a * b
+    elif isinstance(a, tuple) and isinstance(b, tuple):
+        return (a[0] * b[0], a[1] * b[1])
+    elif isinstance(a, int) and isinstance(b, tuple):
+        return (a * b[0], a * b[1])
+    return (a[0] * b, a[1] * b)
+
+
+def divide(a: IntegerTuple, b: IntegerTuple) -> IntegerTuple:
+    """floor division"""
+    if isinstance(a, int) and isinstance(b, int):
+        return a // b
+    elif isinstance(a, tuple) and isinstance(b, tuple):
+        return (a[0] // b[0], a[1] // b[1])
+    elif isinstance(a, int) and isinstance(b, tuple):
+        return (a // b[0], a // b[1])
+    return (a[0] // b, a[1] // b)
+
+
+def invert(n: IntegerTuple) -> IntegerTuple:
     """inversion with respect to addition"""
     return -n if isinstance(n, int) else (-n[0], -n[1])
 
@@ -82,12 +145,12 @@ def even(n: Integer) -> Boolean:
     return n % 2 == 0
 
 
-def double(n: Numerical) -> Numerical:
+def double(n: IntegerTuple) -> IntegerTuple:
     """scaling by two"""
     return n * 2 if isinstance(n, int) else (n[0] * 2, n[1] * 2)
 
 
-def halve(n: Numerical) -> Numerical:
+def halve(n: IntegerTuple) -> IntegerTuple:
     """scaling by one half"""
     return n // 2 if isinstance(n, int) else (n[0] // 2, n[1] // 2)
 
@@ -207,27 +270,45 @@ def either(a: Boolean, b: Boolean) -> Boolean:
     return a or b
 
 
-def increment(x: Numerical) -> Numerical:
+def increment_int(x: Integer) -> Integer:
     """incrementing"""
-    return x + 1 if isinstance(x, int) else (x[0] + 1, x[1] + 1)
+    return x + 1
 
 
-def decrement(x: Numerical) -> Numerical:
+def decrement_int(x: Integer) -> Integer:
     """decrementing"""
-    return x - 1 if isinstance(x, int) else (x[0] - 1, x[1] - 1)
+    return x - 1
 
 
-def crement(x: Numerical) -> Numerical:
+def crement_int(x: Integer) -> Integer:
     """incrementing positive and decrementing negative"""
-    if isinstance(x, int):
-        return 0 if x == 0 else (x + 1 if x > 0 else x - 1)
+    return 0 if x == 0 else (x + 1 if x > 0 else x - 1)
+
+
+def sign_int(x: Integer) -> Integer:
+    """sign"""
+    return 0 if x == 0 else (1 if x > 0 else -1)
+
+
+def increment(x: IntegerTuple) -> IntegerTuple:
+    """incrementing"""
+    return (x[0] + 1, x[1] + 1)
+
+
+def decrement(x: IntegerTuple) -> IntegerTuple:
+    """decrementing"""
+    return (x[0] - 1, x[1] - 1)
+
+
+def crement(x: IntegerTuple) -> IntegerTuple:
+    """incrementing positive and decrementing negative"""
     return (
         0 if x[0] == 0 else (x[0] + 1 if x[0] > 0 else x[0] - 1),
         0 if x[1] == 0 else (x[1] + 1 if x[1] > 0 else x[1] - 1),
     )
 
 
-def sign(x: Numerical) -> Numerical:
+def sign(x: IntegerTuple) -> IntegerTuple:
     """sign"""
     if isinstance(x, int):
         return 0 if x == 0 else (1 if x > 0 else -1)
