@@ -1,3 +1,7 @@
+"""
+copied from https://github.com/michaelhodel/arc-dsl
+"""
+
 from typing import Union, Tuple, Container, FrozenSet
 
 Boolean = bool
