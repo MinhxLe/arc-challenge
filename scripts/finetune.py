@@ -32,9 +32,8 @@ with torch.no_grad():
         do_sample=True,
         pad_token_id=tokenizer.eos_token_id,
     )
-
 # Decode and return the generated text
-generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+generated_text = tokenizer.decode(outputs[0], skip_special_tokens=False)
 
 
 # peft_config = LoraConfig(
