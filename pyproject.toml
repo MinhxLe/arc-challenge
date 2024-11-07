@@ -1,4 +1,4 @@
 [tool.pyright]
-  exclude = ["tests", "arc_dsl"]
+  exclude = ["tests", "arc_dsl", "scripts"]
 [tool.ruff]
   exclude = ["arc_dsl"]
