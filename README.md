@@ -40,3 +40,7 @@ uv venv --python 3.11
 2. `lsyncd lsyncd.conf.lua`
 ## (WIP) Running code
 ## (WIP) Running  notebook
+
+
+# TODO
+- use flash attention 2 (https://huggingface.co/docs/transformers/perf_infer_gpu_one)
