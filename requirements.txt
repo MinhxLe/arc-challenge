@@ -2,9 +2,14 @@
 arckit>=0.1.0
 drawsvg[all]
 
+# ml 
+torch==2.4.1
+torchaudio==2.4.1
+torchvision==0.19.1
+
 # development
 pytest
 pre-commit
-ruff>=0.7.1
+ruff>=0.7.2
 pyright>=1.1.386
-ipython
+ipython>=7.31.1
