@@ -7,14 +7,10 @@ Grid = ta.Tuple[ta.Tuple[int]]
 
 class Concept(str, Enum):
     COLOR_MAPPING = "color mapping"
-    MIRRORING = "mirroring"
+    REFLECTION = "reflection"
     ROTATION = "rotation"
     SYMMETRY = "symmetry"
     TRANSLATION = "translation"
-
-
-class Color(str, Enum):
-    pass
 
 
 class SeedTask:
