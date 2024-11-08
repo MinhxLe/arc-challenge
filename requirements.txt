@@ -17,6 +17,7 @@ wandb>=0.18.5
 
 # utils
 python-dotenv==1.0.1
+pydantic>=2.9.2
 
 # development
 pytest
