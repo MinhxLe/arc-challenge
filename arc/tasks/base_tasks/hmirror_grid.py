@@ -1,4 +1,4 @@
-from arc.seed_tasks.constants import (
+from arc.tasks.constants import (
     MIN_GRID_WIDTH,
     MIN_GRID_HEIGHT,
     MAX_GRID_WIDTH,
@@ -6,7 +6,7 @@ from arc.seed_tasks.constants import (
     MAX_COLOR_INT,
     MAX_GRID_HEIGHT,
 )
-from arc.seed_tasks.types import Grid
+from arc.tasks.types import Grid
 from arc.utils import ndarray_to_tuple
 import numpy as np
 
