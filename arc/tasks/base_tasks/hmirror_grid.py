@@ -2,11 +2,9 @@ from arc.tasks.constants import (
     MIN_GRID_WIDTH,
     MIN_GRID_HEIGHT,
     MAX_GRID_WIDTH,
-    MIN_COLOR_INT,
-    MAX_COLOR_INT,
     MAX_GRID_HEIGHT,
 )
-from arc.tasks.types import Grid
+from arc.tasks.types import Grid, Color
 from arc.utils import ndarray_to_tuple
 import numpy as np
 
@@ -52,8 +50,8 @@ def generate_input() -> Grid:
     # sized using the random height and width.
     return ndarray_to_tuple(
         rng.integers(
-            low=MIN_COLOR_INT,
-            high=MAX_COLOR_INT + 1,
+            low=min(Color),
+            high=max(Color) + 1,
             size=(height, width),
         )
     )
