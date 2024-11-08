@@ -1,8 +1,9 @@
 import typing as ta
-from enum import IntEnum
+from enum import IntEnum, Enum
+import numpy as np
 
 
-Grid = ta.Tuple[ta.Tuple[int]]
+Grid = np.ndarray[ta.Tuple[int, int], np.dtype[np.integer]]
 
 
 class Color(IntEnum):
@@ -16,3 +17,11 @@ class Color(IntEnum):
     BROWN = 7
     GREY = 8
     PINK = 9
+
+
+class Concept(str, Enum):
+    COLOR_MAPPING = "color mapping"
+    REFLECTION = "reflection"
+    ROTATION = "rotation"
+    SYMMETRY = "symmetry"
+    TRANSLATION = "translation"

@@ -4,11 +4,10 @@ from arc.tasks.constants import (
     MAX_GRID_WIDTH,
     MAX_GRID_HEIGHT,
 )
-from arc.tasks.types import Grid, Color
-from arc.utils import ndarray_to_tuple
+from arc.tasks.types import Grid, Color, Concept
 import numpy as np
 
-concepts = ["reflection", "symmetry"]
+concepts = [Concept.REFLECTION, Concept.SYMMETRY]
 
 description = """The input is a grid and the output is a grid.
 To make the output grid, create the mirror image of the input grid using
@@ -27,15 +26,8 @@ def transform_grid(input_grid: Grid) -> Grid:
     Returns:
         A new grid with rows in reversed order (horizontally mirrored)
     """
-    # Convert the input grid to a list of rows for clarity
-    rows = list(input_grid)
 
-    # Create a new list with rows in reversed order
-    # This mirrors the grid horizontally (top becomes bottom, bottom becomes top)
-    mirrored_rows = rows[::-1]
-
-    # Convert back to tuple of tuples to maintain Grid type
-    return tuple(mirrored_rows)
+    return input_grid[::-1]
 
 
 def generate_input() -> Grid:
@@ -48,10 +40,8 @@ def generate_input() -> Grid:
 
     # Randomly assign integer values to each element of a grid
     # sized using the random height and width.
-    return ndarray_to_tuple(
-        rng.integers(
-            low=min(Color),
-            high=max(Color) + 1,
-            size=(height, width),
-        )
+    return rng.integers(
+        low=min(Color),
+        high=max(Color) + 1,
+        size=(height, width),
     )
