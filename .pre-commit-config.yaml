@@ -8,6 +8,6 @@ repos:
       # Run the formatter.
       - id: ruff-format
   - repo: https://github.com/RobertCraigie/pyright-python
-    rev: v1.1.386
+    rev: v1.1.388
     hooks:
     - id: pyright

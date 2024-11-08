@@ -24,3 +24,6 @@ pre-commit
 ruff>=0.7.2
 pyright>=1.1.386
 ipython>=7.31.1
+
+# 3p
+openai==1.54.3
