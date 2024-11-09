@@ -1,10 +1,12 @@
-from arc.tasks.constants import (
+from arc.core import (
     MIN_GRID_WIDTH,
     MIN_GRID_HEIGHT,
     MAX_GRID_WIDTH,
     MAX_GRID_HEIGHT,
+    Grid,
+    Color,
+    Concept,
 )
-from arc.tasks.types import Grid, Color, Concept
 import numpy as np
 
 concepts = [Concept.REFLECTION, Concept.SYMMETRY]
