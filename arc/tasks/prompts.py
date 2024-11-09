@@ -13,38 +13,6 @@ black, blue, red, yellow, purple,  orange, green, brown, grey, and pink. The gri
 width can be inclusive between 1 to 30 pixels.
 """
 
-# TODO inject this from  module itself
-code_system_prompt = f"""
-{system_prompt}
-
-You are given access to the following python file.
-arc/types.py
-```python
-import typing as ta
-from enum import IntEnum, Enum
-import numpy as np
-
-
-Grid = np.ndarray[ta.Tuple[int, int], np.dtype[np.integer]]
-
-
-class Color(IntEnum):
-    BLACK = 0
-    BLUE = 1
-    RED = 2
-    YELLOW = 3
-    PURPLE = 4
-    ORANGE = 5
-    GREEN = 6
-    BROWN = 7
-    GREY = 8
-    PINK = 9
-```
-
-arc/
-
-"""
-
 
 def create_puzzle_descriptions_prompt(concepts: list[str], count: int) -> str:
     concept_string = ", ".join(concepts)
