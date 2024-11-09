@@ -13,30 +13,42 @@ def _get_client() -> OpenAI:
     return OpenAI(api_key=settings.OAI_API_KEY)
 
 
-def complete(msg: str, system_msg: Optional[str] = None) -> str:
-    if system_msg is not None:
-        msgs = [dict(role="system", content=system_msg)]
+def complete(
+    prompt: str,
+    system_prompt: Optional[str] = None,
+    temperature: float = 0,
+) -> str:
+    if system_prompt is not None:
+        prompts = [dict(role="system", content=system_prompt)]
     else:
-        msgs = []
-    msgs.append(dict(role="user", content=msg))
+        prompts = []
+    prompts.append(dict(role="user", content=prompt))
 
-    response = _get_client().chat.completions.create(messages=msgs, model=OAI_MODEL)
+    response = _get_client().chat.completions.create(
+        messages=prompts,
+        model=OAI_MODEL,
+        temperature=temperature,
+    )
     assert len(response.choices) == 1
     return response.choices[0].message.content
 
 
 def complete_structured(
-    msg: str,
+    prompt: str,
     response_format: Type[T],
-    system_msg: Optional[str] = None,
+    system_prompt: Optional[str] = None,
+    temperature: float = 0,
 ) -> T:
-    if system_msg is not None:
-        msgs = [dict(role="system", content=system_msg)]
+    if system_prompt is not None:
+        prompts = [dict(role="system", content=system_prompt)]
     else:
-        msgs = []
-    msgs.append(dict(role="user", content=msg))
+        prompts = []
+    prompts.append(dict(role="user", content=prompt))
     response = _get_client().beta.chat.completions.parse(
-        model=OAI_MODEL, messages=msgs, response_format=response_format
+        model=OAI_MODEL,
+        messages=prompts,
+        response_format=response_format,
+        temperature=temperature,
     )
 
     return response.choices[0].message.parsed
