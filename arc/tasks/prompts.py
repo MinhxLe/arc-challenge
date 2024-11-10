@@ -80,3 +80,35 @@ that captures the description.
 
 The description is {description}. Only return the python code.
 """
+
+
+def create_base_task_puzzle_descriptions_prompt(
+    concept: core.Concept, count: int
+) -> str:
+    concept_string = concept.value
+
+    return f"""
+As a way to introduce student puzzle solvers to basic concepts, you want to generate simple puzzles that illustrate
+in as pure a manner as possible a given concept. Given a single high level concept, please create a new puzzle where
+the transformation law captures the concept in as clear and simplified a manner as possible. Note that the concept does NOT
+apply to what the inputs should look like.
+You will create a description for the new puzzle that describes the input grids and the transformation law. The description
+of input grids should define inputs for which the outputs exemplify the transformation law.
+
+
+For example:
+# Example 1:
+## given concept: reflection
+## puzzle description:
+In the input you will see a grid of colored pixels. The output should be
+a grid that is the reflection of the input grid across its horizontal midline.
+
+
+# Example 2:
+## given concept: rotation
+## puzzle description:
+In the input, you will see a grid of colored pixels. The output should be
+a grid that is the input grid rotated 90 degrees counterclockwise.
+
+Give {count} different puzzle description(s) for the input concept: {concept_string}.
+"""
