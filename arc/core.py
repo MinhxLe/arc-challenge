@@ -7,7 +7,7 @@ MAX_GRID_WIDTH = 30
 MIN_GRID_HEIGHT = 1
 MAX_GRID_HEIGHT = 30
 
-# Tuple of width and height and each  entry is an integer representing the color.
+# Tuple of width and height and each entry is an integer representing the color.
 Grid = np.ndarray[ta.Tuple[int, int], np.dtype[np.integer]]
 
 
