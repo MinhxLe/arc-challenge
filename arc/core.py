@@ -7,10 +7,15 @@ MAX_GRID_WIDTH = 30
 MIN_GRID_HEIGHT = 1
 MAX_GRID_HEIGHT = 30
 
+# Tuple of width and height and each  entry is an integer representing the color.
 Grid = np.ndarray[ta.Tuple[int, int], np.dtype[np.integer]]
 
 
 class Color(IntEnum):
+    """
+    Colors are strings (NOT integers), so you CAN'T do math/arithmetic/indexing/ordering on them.
+    """
+
     BLACK = 0
     BLUE = 1
     RED = 2
@@ -21,6 +26,16 @@ class Color(IntEnum):
     BROWN = 7
     GREY = 8
     PINK = 9
+
+    @classmethod
+    @property
+    def ALL_COLORS(cls) -> list["Color"]:
+        return [c for c in cls]
+
+    @classmethod
+    @property
+    def NOT_BLACK(cls) -> list["Color"]:
+        return [c for c in cls if c != Color.BLACK]
 
 
 class Concept(str, Enum):

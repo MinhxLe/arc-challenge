@@ -4,7 +4,8 @@
   venv = ".venv"
 
 [tool.ruff]
-  exclude = ["arc_dsl"]
+exclude = ["arc_dsl"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+

@@ -17,6 +17,7 @@ def complete(
     prompt: str,
     system_prompt: Optional[str] = None,
     temperature: float = 0,
+    return_raw: bool = False,
 ) -> str:
     if system_prompt is not None:
         prompts = [dict(role="system", content=system_prompt)]
@@ -30,7 +31,10 @@ def complete(
         temperature=temperature,
     )
     assert len(response.choices) == 1
-    return response.choices[0].message.content
+    if not return_raw:
+        return response.choices[0].message.content
+    else:
+        return response
 
 
 def complete_structured(
@@ -38,6 +42,7 @@ def complete_structured(
     response_format: Type[T],
     system_prompt: Optional[str] = None,
     temperature: float = 0,
+    return_raw: bool = False,
 ) -> T:
     if system_prompt is not None:
         prompts = [dict(role="system", content=system_prompt)]
@@ -50,5 +55,7 @@ def complete_structured(
         response_format=response_format,
         temperature=temperature,
     )
-
-    return response.choices[0].message.parsed
+    if not return_raw:
+        return response_format.model_validate_json(response.choices[0].message.content)
+    else:
+        return response
