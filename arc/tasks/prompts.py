@@ -35,15 +35,17 @@ The following are just function signatures.
 def create_puzzle_descriptions_prompt(concepts: list[core.Concept], count: int) -> str:
     concept_string = ", ".join([c.value for c in concepts])
     return f"""
-You are given high level concepts that should guide your creation of a new puzzle where the transformation law captures the concepts. Note that the concepts
-do NOT apply to the inputs. You will create a description for the new puzzle that describes the input grids and the transformation law. The description
-of the input grids should define inputs which lead to outputs that exemplify the transformation law.
+You are given high level concepts that should guide your creation of a new puzzle where the transformation law from inputs to outputs captures the concepts.
+Note that inputs themselves do not need to conform to the concepts. For example, for the concept "reflection", the inputs do not need to be symmetric themselves.
+Instead, the concepts should be embodied in how the input is transformed into the output.
+You will create a description for the new puzzle that describes the input grids and the transformation law. The description
+of the input grids should define inputs such that when the transformation law is applied to them, the concepts are illustrated.
 
 
 For example:
 # Example 1:
-## input concept: color mapping, pattern replication
-## output description:
+## concepts: color mapping, pattern replication
+## new puzzle description:
 In the input you will see a 3x3 grid of colored pixels. The colors are either black or gray. The output should be
 a grid where:
 1. If the pixel is black, it remains black in the output.
@@ -51,8 +53,8 @@ a grid where:
 
 
 # Example 2:
-## input concept: color transformation, grid sections, boundary detection
-## output description:
+## concepts: color transformation, grid sections, boundary detection
+## new puzzle description:
 In the input, you will see a grid with a pattern of yellow and blue pixels with a black background, 
 and multiple colored circles (not yellow or blue) placed randomly within the grid.
 The goal is to transform the output grid by replacing all the blue pixels with the color of the closest circle 
