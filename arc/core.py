@@ -111,3 +111,4 @@ class Concept(str, Enum):
     FUSION = "fusion"
     ATTACHMENT = "attachment"
     DETACHMENT = "detachment"
+    TRUNCATION = "truncation"
