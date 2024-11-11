@@ -57,7 +57,7 @@ a grid where:
 ## new puzzle description:
 In the input, you will see a grid with a pattern of yellow and blue pixels with a black background, 
 and multiple colored circles (not yellow or blue) placed randomly within the grid.
-The goal is to transform the output grid by replacing all the blue pixels with the color of the closest circle 
+The goal is to transform the input grid by replacing all the blue pixels with the color of the closest circle 
 and keeping the yellow pixels unchanged.
 
 Give {count} different output description(s) for the input concepts: {concept_string}.
@@ -79,4 +79,46 @@ that captures the description.
 ```
 
 The description is {description}. Only return the python code.
+"""
+
+
+def create_base_task_puzzle_descriptions_prompt(
+    concept: core.Concept, count: int
+) -> str:
+    concept_string = concept.value
+
+    return f"""
+As a way to introduce student puzzle solvers to basic concepts, you want to generate simple puzzles that illustrate a
+given concept in as pure a manner as possible. You take a single high level concept as an input, and then create a new puzzle where
+the transformation law captures the concept in as clear and simplified a manner as possible. Note that input grids themselves
+do not need to conform to the concepts. For example, for the concept "reflection", the input grids do not need to be symmetric themselves.
+Instead, the concepts should be embodied in how the input grid is transformed into the output grid.
+
+Given the input concept, you will output a description for the simple puzzle. The output description should describe
+input grids and the transformation law. The description of the input grids should define inputs such that when the
+transformation law is applied to them, the concept is illustrated.
+The output description should not start by restating the input concept.
+
+For example:
+# Example 1:
+## input concept: reflection
+## output description:
+In the input, you will see a grid of colored pixels. The output should be
+a grid that is the reflection of the input grid across its horizontal midline.
+
+
+# Example 2:
+## given concept: rotation
+## output description:
+In the input, you will see a grid of colored pixels. The output should be
+a grid that is the input grid rotated 90 degrees counterclockwise.
+
+# Example 3:
+## given concept: filling
+## output description:
+In the input, you will see a single four pixel by four pixel box whose boundary is
+yellow and whose interior is black. The output grid should be the same as the input
+grid except that the interior of the box should be filled in with yellow.
+
+Give {count} different puzzle description(s) for the input concept: {concept_string}.
 """
