@@ -9,7 +9,8 @@ ORIGINAL_MODEL_DIR="./tmp/models/llama_3_1_8b_instruct"
 OUTPUT_DIR="./tmp/runs/$RUN_NAME"
 echo "$OUTPUT_DIR"
 
-CONFIG_FNAME="./config/llama_3_1_8b_lora_induction_baseline.yaml"
+# CONFIG_FNAME="./config/llama_3_1_8b_lora_induction_baseline.yaml"
+CONFIG_FNAME="./config/test.yaml"
 
 if [ ! -d "$ORIGINAL_MODEL_DIR" ]; then
     tune download meta-llama/Llama-3.1-8B-Instruct \
@@ -27,7 +28,8 @@ tune run lora_finetune_single_device \
   output_dir=$OUTPUT_DIR \
   checkpointer.checkpoint_dir=$ORIGINAL_MODEL_DIR \
   checkpointer.output_dir=$OUTPUT_DIR  \
-  tokenizer.path=$ORIGINAL_MODEL_DIR/tokenizer.model
+  tokenizer.path=$ORIGINAL_MODEL_DIR/original/tokenizer.model
+  output_dir=$OUTPUT_DIR
 
 
 
