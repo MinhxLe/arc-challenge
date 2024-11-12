@@ -4,10 +4,14 @@ set -a
 . ./.env
 set -a
 
-ORIGINAL_MODEL_DIR="/tmp/llama_8b_instruct/original"
-OUTPUT_DIR="./tmp/llama_8b_lora"
-CKPT_DIR="$OUTPUT_DIR/checkpoints"
-LOG_DIR=".$OUTPUT_DIR/logs"
+# TODO make this based of the parameters of the run
+RUN_NAME="llama_3_1_8b_lora_induction_baseline"
+ORIGINAL_MODEL_DIR="./tmp/models/llama_3_1_8b_instruct"
+OUTPUT_DIR="./tmp/runs/$RUN_NAME"
+echo "$OUTPUT_DIR"
+
+CONFIG_FNAME="./config/llama_3_1_8b_lora_induction_baseline.yaml"
+# CONFIG_FNAME="./config/test.yaml"
 
 if [ ! -d "$ORIGINAL_MODEL_DIR" ]; then
     tune download meta-llama/Llama-3.1-8B-Instruct \
@@ -15,14 +19,18 @@ if [ ! -d "$ORIGINAL_MODEL_DIR" ]; then
       --hf-token $HF_API_TOKEN
 fi
 
-if [ ! -d "$CKPT_DIR" ]; then
-  mkdir -p CKPT_DIR
+if [ ! -d "$OUTPUT_DIR" ]; then
+  echo "making $OUTPUT_DIR"
+  mkdir -p $OUTPUT_DIR
 fi
 
 tune run lora_finetune_single_device \
-  --config ./config/llama_8b_lora.yaml \
+  --config $CONFIG_FNAME \
   output_dir=$OUTPUT_DIR \
-  checkpointer.checkpoint_dir=$CKPT_DIR \
-  checkpointer.output_dir=$CKPT_DIR 
+  checkpointer.checkpoint_dir=$ORIGINAL_MODEL_DIR \
+  checkpointer.output_dir=$OUTPUT_DIR  \
+  tokenizer.path=$ORIGINAL_MODEL_DIR/original/tokenizer.model
+  output_dir=$OUTPUT_DIR
+
 
 
