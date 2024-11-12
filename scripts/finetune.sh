@@ -25,7 +25,7 @@ fi
 tune run lora_finetune_single_device \
   --config $CONFIG_FNAME \
   output_dir=$OUTPUT_DIR \
-  checkpointer.checkpoint_dir=$CKPT_DIR \
+  checkpointer.checkpoint_dir=$ORIGINAL_MODEL_DIR \
   checkpointer.output_dir=$CKPT_DIR 
 
 

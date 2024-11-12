@@ -18,7 +18,7 @@ tokenizer:
 checkpointer:
   _component_: torchtune.training.FullModelMetaCheckpointer
   checkpoint_files: [
-    "./tmp/models/llama_3_1_8b_instruct/original/consolidated.00.pth"
+    "consolidated.00.pth"
   ]
   recipe_checkpoint: null
   model_type: LLAMA3
