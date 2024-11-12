@@ -12,13 +12,12 @@ model:
 # Tokenizer
 tokenizer:
   _component_: torchtune.models.llama3.llama3_tokenizer  # is this  right?
-  path: ./tmp/llama_8b_instruct/original/tokenizer.model
   max_seq_len: null
 
 checkpointer:
   _component_: torchtune.training.FullModelMetaCheckpointer
   checkpoint_files: [
-    "consolidated.00.pth"
+    "original/consolidated.00.pth"
   ]
   recipe_checkpoint: null
   model_type: LLAMA3
