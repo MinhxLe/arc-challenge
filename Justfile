@@ -21,3 +21,6 @@ watch_sync:
     --exclude "\.idea" \
     --exclude "node_modules" \
     . | xargs -n1 -I{} just sync
+
+setup_tmp:
+  mkdir tmp && mkdir tmp/runs && mkdir tmp/models && mkdir tmp/datasets
