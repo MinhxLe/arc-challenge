@@ -1,4 +1,5 @@
 # config copied from https://github.com/xu3kev/BARC/blob/master/finetune/alignment-handbook/recipes/barc/config_lora_llama3_induction.yaml
+seed: 42
 model:
   _component: torchtune.models.llama3.lora_llama3_1_8b
   lora_attn_modules: ['q_proj', 'v_proj', "k_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
@@ -11,7 +12,7 @@ model:
 # Tokenizer
 tokenizer:
   _component_: torchtune.models.llama3.llama3_tokenizer  # is this  right?
-  path: /tmp/llama_8b_instruct/original/tokenizer.model
+  path: ./tmp/llama_8b_instruct/original/tokenizer.model
   max_seq_len: null
 
 checkpointer:
