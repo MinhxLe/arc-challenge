@@ -30,7 +30,8 @@ tune run lora_finetune_single_device \
   checkpointer.checkpoint_dir=$ORIGINAL_MODEL_DIR \
   checkpointer.output_dir=$OUTPUT_DIR  \
   tokenizer.path=$ORIGINAL_MODEL_DIR/original/tokenizer.model
-  output_dir=$OUTPUT_DIR
+  
+utput_dir=$OUTPUT_DIR
 
 
 
