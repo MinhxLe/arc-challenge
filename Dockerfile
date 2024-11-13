@@ -1,15 +1,18 @@
-FROM nvidia/cuda:12.4.0-devel-ubuntu22.04 as cuda-base 
-FROM ghcr.io/astral-sh/uv:latest as uv-base
-FROM python:3.11-slim-bullseye
+FROM nvidia/cuda:12.4.0-devel-ubuntu22.04 
 
-# Copy CUDA runtime libraries and dependencies from cuda-base
-COPY --from=cuda-base /usr/local/cuda/lib64 /usr/local/cuda/lib64
-COPY --from=cuda-base /usr/local/cuda/include /usr/local/cuda/include
-ENV PATH=/usr/local/cuda/bin:${PATH}
-ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Install uv
-COPY --from=uv-base /uv /uvx /bin/
+RUN apt update && apt install -y git
 
+ENV VIRTUAL_ENV=$HOME/.venv
+RUN uv python install 3.11
+RUN uv venv --python 3.11 $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
+# we install flash-attn and torch bc it takes forever
+RUN uv pip install torch==2.4.1 
+RUN uv pip install packaging setuptools ninja 
+RUN uv pip install flash-attn --no-build-isolation
+RUN uv pip install "unsloth[cu124-ampere-torch240] @ git+https://github.com/unslothai/unsloth.git"
 
 CMD ["tail", "-f", "/dev/null"]
