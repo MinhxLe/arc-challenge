@@ -31,6 +31,7 @@ ipython>=7.31.1
 
 # 3p
 openai==1.54.3
+wandb==0.18.6
 
 # TODO: flash attn
 # ninja
