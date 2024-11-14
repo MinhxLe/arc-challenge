@@ -3,7 +3,8 @@ import inspect
 import arckit
 from arc import core
 from arc.tasks import lib
-from arc.utils import print_color_array
+from arc.utils import create_color_array
+import typing as ta
 
 
 puzzlemaker_role_prompt = """
@@ -133,35 +134,31 @@ Give {count} different puzzle description(s) for the input concept: {concept_str
 """
 
 
-def create_input_string(example) -> str:
-    return "Input:" + "\n" + print_color_array(example[0])
-
-
-def create_input_output_string(example) -> str:
-    return (
-        create_input_string(example)
-        + "\n\n"
-        + "Output:"
-        + "\n"
-        + print_color_array(example[1])
-    )
-
-
 def create_training_prompt(task: arckit.Task) -> str:
-    return (
-        """Given input-output grid pairs as reference examples, carefully observe the patterns to predict the output grid for new test input. Each pair follows the same transformation rule. Grids are 2D arrays represented as strings, with cells (colors) separated by spaces and rows by newlines.
-Here are the input and output grids for the reference examples:"""
-        + "\n"
-        + "\n\n\n".join(
-            [
-                f"Example {idx+1}:" + "\n" + create_input_output_string(example)
-                for idx, example in enumerate(task.train)
-            ]
-        )
-        + "\n\n\n"
-        + "Here is the input grid for the test example:"
-        + "\n"
-        + create_input_string(task.test[0])
-        + "\n\n"
-        + "Write a Python function `transform` that can convert any given input grid to its corresponding output grid based on the pattern observed in the reference examples."
+    training_examples = "\n\n\n".join(
+        [
+            f"Example {idx+1}:" + "\n" + _create_input_output_string(example)
+            for idx, example in enumerate(task.train)
+        ]
     )
+
+    return f"""Given input-output grid pairs as reference examples, carefully observe the patterns to predict the output grid for new test input. Each pair follows the same transformation rule. Grids are 2D arrays represented as strings, with cells (colors) separated by spaces and rows by newlines.
+Here are the input and output grids for the reference examples:
+{training_examples}
+
+
+Here is the input grid for the test example:
+{_create_input_string(task.test[0])}
+
+Write a Python function `transform` that can convert any given input grid to its corresponding output grid based on the pattern observed in the reference examples."""
+
+
+def _create_input_string(example: ta.Tuple[core.Grid, core.Grid]) -> str:
+    return "Input:" + "\n" + create_color_array(example[0])
+
+
+def _create_input_output_string(example: ta.Tuple[core.Grid, core.Grid]) -> str:
+    return f"""{_create_input_string(example)}
+
+Output:
+{create_color_array(example[1])}"""

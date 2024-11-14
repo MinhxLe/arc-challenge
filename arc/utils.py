@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Tuple
-from arc.core import Color
+from arc.core import Color, Grid
 
 
 def ndarray_to_tuple(array: np.ndarray) -> Tuple:
@@ -17,12 +17,12 @@ def tuple_to_ndarray(tup: Tuple) -> np.ndarray:
         return np.array([tuple_to_ndarray(row) for row in tup])
 
 
-def print_color_array(arr):
+def create_color_array(arr: Grid) -> str:
     """
-    Convert a 2D ndarray of integers to a string representation of color names.
+    Convert a Grid to a string representation of color names.
 
     Args:
-        arr (numpy.ndarray): 2D array of integers corresponding to Color enum values
+        arr (Grid): 2D array of integers corresponding to Color enum values
 
     Returns:
         str: Multi-line string with color names separated by spaces

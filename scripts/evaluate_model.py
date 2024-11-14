@@ -5,7 +5,7 @@ import re
 from typing import Optional, Any
 
 
-def extract_and_load_code(llm_response: str) -> Optional[dict[str, Any]]:
+def extract_code(llm_response: str) -> Optional[dict[str, Any]]:
     """
     Extracts Python code from an LLM response string and returns a dictionary
     containing the executable objects defined in the code.
@@ -49,7 +49,7 @@ for task in eval_set:
         prompt=create_training_prompt(task), system_prompt=puzzlesolver_role_prompt
     )
 
-    solution_namespace = extract_and_load_code(llm_response)
+    solution_namespace = extract_code(llm_response)
 
     test_input = task.test[0][0]
 
