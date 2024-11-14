@@ -37,3 +37,5 @@ openai==1.54.3
 # packaging
 # setuptools
 # flash-attn
+
+# TODO: add unsloth
