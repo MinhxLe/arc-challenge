@@ -1,7 +1,11 @@
 from pydantic.main import BaseModel
 import inspect
+import arckit
 from arc import core
 from arc.tasks import lib
+from arc.utils import create_color_array
+import typing as ta
+
 
 puzzlemaker_role_prompt = """
 You are a puzzle maker designing geometric, physical, and topological
@@ -15,8 +19,7 @@ black, blue, red, yellow, purple, orange, green, brown, grey, and pink. The grid
 width can be between 1 to 30 pixels inclusive.
 """
 
-programmer_role_prompt = f"""
-{puzzlemaker_role_prompt}. Additionally you are an expert python programmer. You adhere to best practices to make code clear and easy to understand. This includes comments, docstring, and using constants. Where you can, you will use existing code such as the provided library.
+programming_addendum = f""" Additionally you are an expert Python programmer. You adhere to best practices to make code clear and easy to understand. This includes comments, docstring, and using constants. Where you can, you will use existing code such as the provided library.
 
 You are given access to the following python code.
 arc/core.py
@@ -30,6 +33,13 @@ The following are just function signatures.
 {inspect.getsource(lib)}
 ```
 """
+
+programmer_role_prompt = f"""
+{puzzlemaker_role_prompt}. {programming_addendum}
+"""
+
+puzzlesolver_role_prompt = f"""You are a world-class puzzle solver with exceptional pattern recognition skills and expertise in Python programming.
+Your task is to analyze puzzles and provide Python solutions. {programming_addendum}"""
 
 
 def create_puzzle_descriptions_prompt(concepts: list[core.Concept], count: int) -> str:
@@ -122,3 +132,33 @@ grid except that the interior of the box should be filled in with yellow.
 
 Give {count} different puzzle description(s) for the input concept: {concept_string}.
 """
+
+
+def create_training_prompt(task: arckit.Task) -> str:
+    training_examples = "\n\n\n".join(
+        [
+            f"Example {idx+1}:" + "\n" + _create_input_output_string(example)
+            for idx, example in enumerate(task.train)
+        ]
+    )
+
+    return f"""Given input-output grid pairs as reference examples, carefully observe the patterns to predict the output grid for new test input. Each pair follows the same transformation rule. Grids are 2D arrays represented as strings, with cells (colors) separated by spaces and rows by newlines.
+Here are the input and output grids for the reference examples:
+{training_examples}
+
+
+Here is the input grid for the test example:
+{_create_input_string(task.test[0])}
+
+Write a Python function `transform` that can convert any given input grid to its corresponding output grid based on the pattern observed in the reference examples."""
+
+
+def _create_input_string(example: ta.Tuple[core.Grid, core.Grid]) -> str:
+    return "Input:" + "\n" + create_color_array(example[0])
+
+
+def _create_input_output_string(example: ta.Tuple[core.Grid, core.Grid]) -> str:
+    return f"""{_create_input_string(example)}
+
+Output:
+{create_color_array(example[1])}"""

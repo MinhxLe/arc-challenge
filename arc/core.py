@@ -19,13 +19,17 @@ class Color(IntEnum):
     BLACK = 0
     BLUE = 1
     RED = 2
-    YELLOW = 3
-    PURPLE = 4
-    ORANGE = 5
-    GREEN = 6
-    BROWN = 7
-    GREY = 8
-    PINK = 9
+    GREEN = 3
+    YELLOW = 4
+    GREY = 5
+    GRAY = 5
+    PINK = 6
+    ORANGE = 7
+    TEAL = 8
+    MAROON = 9
+    # Keep these below BLACK so that Color(0).name returns 'BLACK'
+    TRANSPARENT = 0  # sometimes the language model likes to pretend that there is something called transparent/background, and black is a reasonable default
+    BACKGROUND = 0
 
     @classmethod
     @property
