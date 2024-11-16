@@ -1,105 +1,110 @@
 import arckit
-from arc.tasks.prompts import puzzlesolver_role_prompt, create_training_prompt
-import numpy as np
+from arc.tasks import prompts
 import re
-from typing import Optional
-from datasets import load_dataset
+from typing import Callable, Optional
 import os
-import uuid
-import importlib
+import torch
 
-TMP_SOLUTION_DIR = "data/tmp_solutions"
+from unsloth import FastLanguageModel
 
-# only used for mocking llm responses
-dataset = load_dataset(
-    "barc0/induction_100k_gpt4o-mini_generated_problems_seed100.jsonl_messages_format_0.3"
+
+#  loading in model
+CHECKPOINT_DIR = (
+    "tmp/runs/llama_3_1_8b_lora_barc_finetune_20241114_193633/checkpoint-12123"
+)
+SOLUTION_DIR = (
+    "tmp/runs/llama_3_1_8b_lora_barc_finetune_20241114_193633/code_generation"
 )
 
+model, tokenizer = FastLanguageModel.from_pretrained(
+    CHECKPOINT_DIR,
+    dtype=torch.bfloat16,
+)
+model = FastLanguageModel.for_inference(model)
 
-def create_module(llm_response: str) -> Optional[str]:
-    """
-    Extracts Python code from an LLM response string and returns a dictionary
-    containing the executable objects defined in the code.
 
-    Args:
-        llm_response (str): The string containing the LLM response with Python code
+os.makedirs(SOLUTION_DIR, exist_ok=True)
 
-    Returns:
-        Optional[dict]: Dictionary containing the defined objects, or None if no code found
-    """
-    # Extract code between Python code blocks
-    code_match = re.search(r"```python\n(.*?)```", llm_response, re.DOTALL)
 
-    if not code_match:
-        return None
-
-    # Extract the code content
-    code = (
-        code_match.group(1)
-        .strip()
-        .replace("from common import", "from arc.dsl.common import")
+def generate_code(task) -> Optional[str]:
+    messages = [
+        dict(role="system", content=prompts.programmer_role_prompt),
+        dict(role="user", content=prompts.create_solve_task_prompt(task)),
+    ]
+    chat_text = tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )
+    inputs = tokenizer(chat_text, return_tensors="pt")
+    outputs = model.generate(**inputs, temperature=0.8)
+    response = tokenizer.decode(
+        outputs[0][inputs["input_ids"].size(1) :],
+        skip_special_tokens=True,
     )
 
-    # Create the temporary directory if it doesn't exist
-    os.makedirs(TMP_SOLUTION_DIR, exist_ok=True)
+    # Extract code between Python code blocks
+    code_match = re.search(r"```python\n(.*?)```", response, re.DOTALL)
 
-    # Generate a unique filename using UUID
-    module_name = f"solution_{uuid.uuid4().hex[:8]}"
-    filename = module_name + ".py"
-    file_path = os.path.join(TMP_SOLUTION_DIR, filename)
-
-    try:
-        # Write the code to the file
-        with open(file_path, "w") as f:
-            f.write(code)
-        return module_name
-    except Exception as e:
-        print(f"Error writing module: {e}")
-        if os.path.exists(file_path):
-            os.unlink(file_path)
+    if code_match is None:
         return None
+    else:
+        return (
+            code_match.group(1)
+            .strip()
+            .replace("from common import", "from arc.dsl.common import")
+        )
 
 
-def call_the_finetuned_solver(task_index: int, prompt: str, system_prompt: str) -> str:
-    return dataset["train_sft"][task_index]["messages"][2]["content"]  # type: ignore
+def interpret_code(source_code: str) -> Callable:
+    local = dict()
+    exec(source_code, local)
+    assert "transform" in local
+    return local["transform"]
 
 
 train_set, eval_set = arckit.load_data()
 
-results = []
-
+task_to_transform_fn = dict()
+# generating code
 for i, task in enumerate(eval_set):
-    llm_response = call_the_finetuned_solver(
-        i, prompt=create_training_prompt(task), system_prompt=puzzlesolver_role_prompt
-    )
-
-    solution_module_name = create_module(llm_response)
-
-    test_input = task.test[0][0]
-
-    if solution_module_name:
-        try:
-            solution_module = importlib.import_module(
-                f'{TMP_SOLUTION_DIR.replace("/",".")}.{solution_module_name}'
-            )
-            try:
-                solution = solution_module.transform(test_input)
-            except Exception:
-                print(f"{task.id} transform failed to execute")
-                solution = None
-
-        except Exception:
-            print(f"{task.id} solution module failed to import")
-            solution = None
-
-        os.unlink(os.path.join(TMP_SOLUTION_DIR, solution_module_name) + ".py")
-
+    print(f"starting task {task.id}")
+    code = generate_code(task)
+    if code is None:
+        print(f"failed to generate code for {task.id}")
     else:
-        print(f"{task.id} llm response could not be parsed")
-        solution = None
+        with open(f"{SOLUTION_DIR}/solution_{task.id}.py", "w") as f:
+            f.write(code)
+        try:
+            fn = interpret_code(code)
+            task_to_transform_fn[task.id] = fn
+        except Exception:
+            print(f"failed to interpret code for {task.id}")
 
-    if solution is None:
-        solution = test_input  # fall back if parsing and transform function fail
-    results.append((task.id, np.array_equal(solution, task.test[0][1])))
+correct_tasks = []
+to_skip = [
+    "08573cc6",  # infinite loop?
+]
+for i, task in enumerate(eval_set):
+    task_id = task.id
+    print(f"checking {task.id}")
+    if task_id in to_skip:
+        continue
+    if task_id in task_to_transform_fn:
+        input, expected_output = task.test[0]
+        try:
+            output = task_to_transform_fn[task.id](input)
+            if all(output == expected_output):
+                correct_tasks.append(task_id)
+        except Exception:
+            print(f"failed to invoke transform for {task_id}")
+    else:
+        print(f"no fn for {task_id}")
 
-print(f"{sum([solved for _,solved in results])}/{len(eval_set)} solved")
+
+def evaluate_task(task):
+    if task.id in task_to_transform_fn:
+        pass
+    else:
+        print(f"no fn for {task_id}")
+
+
+# df is a numpy ndarray. write code to give me the product of its dimension
