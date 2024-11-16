@@ -13,7 +13,7 @@ CHECKPOINT_DIR = (
     "tmp/runs/llama_3_1_8b_lora_barc_finetune_20241114_193633/checkpoint-12123"
 )
 SOLUTION_DIR = (
-    "tmp/runs/llama_3_1_8b_lora_barc_finetune_20241114_193633/code_generation"
+    "data/runs/llama_3_1_8b_lora_barc_finetune_20241114_193633/code_generation"
 )
 
 model, tokenizer = FastLanguageModel.from_pretrained(
