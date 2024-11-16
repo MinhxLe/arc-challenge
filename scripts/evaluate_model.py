@@ -1,9 +1,14 @@
+from math import exp
 import arckit
 from arc.tasks import prompts
+from arckit.data import fmt_grid
 import re
+from rich.console import Console
+from rich.table import Table
 from typing import Callable, Optional
 import os
 import torch
+import numpy as np
 
 from unsloth import FastLanguageModel
 
@@ -100,11 +105,34 @@ for i, task in enumerate(eval_set):
         print(f"no fn for {task_id}")
 
 
-def evaluate_task(task):
+def print_evaluation(output, expected):
+    console = Console()
+    table = Table()
+    table.add_row(fmt_grid(output), fmt_grid(expected))
+    console.print(table)
+
+
+def print_grid(grid):
+    console = Console()
+    table = Table()
+    table.add_row(fmt_grid(grid))
+    console.print(table)
+
+
+def debug_task(task):
+    print(f"evaluating {task.id}")
+    task.show(answer=True)
     if task.id in task_to_transform_fn:
+        input, expected_output = task.test[0]
+        try:
+            output = task_to_transform_fn[task.id](input)
+            print_grid(output)
+            print(
+                f"got {np.sum(output == expected_output)}/{ np.prod(expected_output.shape)} correct"
+            )
+        except Exception as e:
+            print(f"failed to invoke transform {e}")
         pass
     else:
-        print(f"no fn for {task_id}")
-
-
-# df is a numpy ndarray. write code to give me the product of its dimension
+        print("no fn found")
+    return None
