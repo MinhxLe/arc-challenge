@@ -134,7 +134,7 @@ Give {count} different puzzle description(s) for the input concept: {concept_str
 """
 
 
-def create_training_prompt(task: arckit.Task) -> str:
+def create_solve_task_prompt(task: arckit.Task) -> str:
     training_examples = "\n\n\n".join(
         [
             f"Example {idx+1}:" + "\n" + _create_input_output_string(example)
