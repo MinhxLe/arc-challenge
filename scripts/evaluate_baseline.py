@@ -21,10 +21,20 @@ SOLUTION_DIR = (
     "data/runs/llama_3_1_8b_lora_barc_finetune_20241114_193633/code_generation"
 )
 
+# model, tokenizer = FastLanguageModel.from_pretrained(
+#     CHECKPOINT_DIR,
+#     dtype=torch.bfloat16,
+# )
 model, tokenizer = FastLanguageModel.from_pretrained(
-    CHECKPOINT_DIR,
+    "barc0/Llama-3.1-ARC-Heavy-Induction-8B",
     dtype=torch.bfloat16,
 )
+# model, tokenizer = FastLanguageModel.from_pretrained(
+#     "barc0/Llama-3.1-ARC-Potpourri-Induction-8B",
+#     dtype=torch.bfloat16,
+# )
+
+
 model = FastLanguageModel.for_inference(model)
 
 
@@ -45,7 +55,7 @@ def parse_code(response: str) -> Optional[str]:
         )
 
 
-def batch_generate_code(task, num_samples: int) -> list[str]:
+def batch_generate_code(model, task, num_samples: int) -> list[str]:
     messages = [
         dict(role="system", content=prompts.programmer_role_prompt),
         dict(role="user", content=prompts.create_solve_task_prompt(task)),
@@ -106,26 +116,28 @@ def verify_code(task: arckit.Task, source_code: str) -> Callable | None:
 
 
 def solve_task(
+    model,
     task: arckit.Task,
     max_attempts: int = 1_000,
     save_fname: Optional[str] = None,
 ):
-    batch_size = 4
+    batch_size = 2
     for i in range(0, max_attempts, batch_size):
         logger.debug(f"on attempt {i}")
-        source_codes = batch_generate_code(task, batch_size)
+        source_codes = batch_generate_code(model, task, batch_size)
         for source_code in source_codes:
             fn = verify_code(task, source_code)
             if fn is not None:
                 if save_fname:
                     with open(save_fname, "w") as f:
                         f.write(source_code)
-                return fn
+                return fn, source_code
 
 
 train_set, eval_set = arckit.load_data()
 
-solve_task(eval_set[0])
-
-task = eval_set[0]
-fn = solve_task(task)
+task_id = "f3cdc58f"
+task = eval_set[task_id]
+result = solve_task(model, task)
+if result is not None:
+    fn, source_code = result
