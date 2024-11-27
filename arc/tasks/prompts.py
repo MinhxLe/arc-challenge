@@ -15,7 +15,7 @@ Each puzzle consists of uncovering a deterministic rule, pattern, procedure,
 algorithm, or transformation law that maps inputs to outputs.
 Both the inputs and outputs are 2D grids of colored pixels. There are 10
 colors, but the order of the colors is never relevant to the puzzle. Valid colors include 
-black, blue, red, yellow, purple, orange, green, brown, grey, and pink. The grid height and
+black, blue, red, yellow, maroon, orange, green, brown, grey, and pink. The grid height and
 width can be between 1 to 30 pixels inclusive.
 """
 
