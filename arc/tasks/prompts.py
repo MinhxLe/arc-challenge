@@ -157,8 +157,51 @@ def _create_input_string(example: ta.Tuple[core.Grid, core.Grid]) -> str:
     return "Input:" + "\n" + create_color_array(example[0])
 
 
+<<<<<<< Updated upstream
 def _create_input_output_string(example: ta.Tuple[core.Grid, core.Grid]) -> str:
     return f"""{_create_input_string(example)}
+=======
+def create_improve_solve_task_prompt(
+    task: arckit.Task,
+    programs: list[Program],
+) -> str:
+    training_examples = "\n\n\n".join(
+        [
+            f"Example {idx+1}:" + "\n" + _create_input_output_string(input_, output)
+            for idx, (input_, output) in enumerate(task.train)
+        ]
+    )
+
+    program_executions = "\n\n\n".join(
+        [
+            f"Program {i+1}\n{_create_progam_execution_string(program)}"
+            for i, program in enumerate(programs)
+        ]
+    )
+    return f"""Given input-output grid pairs as reference examples, carefully observe the patterns to predict the output grid for new test input. Each pair follows the same transformation rule. Grids are 2D arrays represented as strings, with cells (colors) separated by spaces and rows by newlines.
+Here are the input and output grids for the reference examples:
+{training_examples}
+
+
+Here is the input grid for the test example:
+{_create_input_string(task.test[0][0])}
+
+You are to write a Python function `transform` that can convert any given input grid to its corresponding output grid based on the pattern observed in the reference examples.
+
+Here are previous attempts of an implementation and their execution result.
+{program_executions}
+
+Iterate on previous Python functions `transform` so that there will be more correct executions and outputs should be different from previous implementations. Explain how this implemenation is different from prior attempts.
+"""
+
+
+def _create_input_string(input_: core.Grid) -> str:
+    return f"Input: \n{create_color_array(input_)}"
+
+
+def _create_input_output_string(input_: core.Grid, output: core.Grid) -> str:
+    return f"""{_create_input_string(input_)}
+>>>>>>> Stashed changes
 
 Output:
 {create_color_array(example[1])}"""

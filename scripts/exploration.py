@@ -1,22 +1,22 @@
+from typing import Tuple, List
+import arckit
 from datasets import load_dataset
+from arc.code_gen import Program
+from dataclasses import dataclass
+from arc.core import Grid
 from arc.external import openai
 from arc.tasks import lib
 import inspect
 
-DATASET = "barc0/induction_100k-gpt4-description-gpt4omini-code_generated_problems_messages_format_0.3"
 
-dataset = load_dataset(
-    "barc0/induction_100k_gpt4o-mini_generated_problems_seed100.jsonl_messages_format_0.3",
-)
-
-dataset["train_sft"][0]["messages"]
-
-
+@dataclass
 class GeneratedTask:
-    inputs: list[np.ndarray]
+    task: arckit.Task
+    program: Program
 
 
-def parse_something(messages)->
+def parse_generated_task(messages) -> GeneratedTask | None:
+    return None
 
 
 prompt = f"""
