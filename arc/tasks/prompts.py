@@ -131,8 +131,8 @@ You are to write a Python function `transform` that can convert any given input 
 Here are previous attempts of an implementation and their execution result.
 {program_executions}
 
-Iterate on previous Python functions `transform` so that there will be more correct executions.
-Pay attention to the wrong executions of Example cases to discover flaws in your approach.
+Iterate on previous versions of Python function `transform` so that there will be more correct executions.
+Pay attention to the wrong executions of Example cases to discover and correct flaws in previous versions of `transform`.
 """
 
 
