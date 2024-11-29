@@ -9,7 +9,6 @@ from typing import Callable, Optional
 import os
 import numpy as np
 from loguru import logger
-
 from unsloth import FastLanguageModel
 from arc.types import Program
 

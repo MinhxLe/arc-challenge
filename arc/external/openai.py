@@ -4,7 +4,7 @@ from pydantic.main import BaseModel
 from arc import settings
 from openai import OpenAI
 
-OAI_MODEL = "gpt-4o-mini"
+OAI_MODEL = "gpt-4o"
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -28,7 +28,6 @@ def complete(
     response = _get_client().chat.completions.create(
         messages=prompts,
         model=OAI_MODEL,
-        temperature=temperature,
     )
     assert len(response.choices) == 1
     if not return_raw:
