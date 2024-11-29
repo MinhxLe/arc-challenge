@@ -123,4 +123,4 @@ train_set, eval_set = arckit.load_data()
 task_id = "f3cdc58f"
 task = eval_set[task_id]
 
-programs = solve_task(task, 20, "first_attempt")
+programs = solve_task(task, 20, "first_attempt_temp_0")

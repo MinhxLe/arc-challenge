@@ -28,6 +28,7 @@ def complete(
     response = _get_client().chat.completions.create(
         messages=prompts,
         model=OAI_MODEL,
+        temperature=temperature,
     )
     assert len(response.choices) == 1
     if not return_raw:
