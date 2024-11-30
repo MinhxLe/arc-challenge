@@ -22,12 +22,50 @@ class Program:
     source: str
     fn: Callable[[Grid], Grid]
 
+    @classmethod
+    def from_source(cls, source: str) -> "Program":
+        local = dict()
+        exec(source, local)
+        assert "transform" in local
+        fn = local["transform"]
+        return Program(source, fn)
+
 
 @dataclass
 class GeneratedTask:
     description: str
     task: arckit.Task
     program: Program
+
+    # we need a custom serialization/deserialization
+    # to dict because fn: Callable is not pkl serializable
+    @classmethod
+    def serialize(cls, task: "GeneratedTask") -> dict:
+        # we need to make sure the input/ouputs are ints and not IntEnum
+        def _serialize_arckit_task(task: arckit.Task) -> arckit.Task:
+            train = [
+                dict(input=i.astype(np.int32), output=o.astype(np.int32))
+                for (i, o) in task.train
+            ]
+            test = [
+                dict(input=i.astype(np.int32), output=o.astype(np.int32))
+                for (i, o) in task.test
+            ]
+            return arckit.Task(id=None, train=train, test=test)
+
+        return dict(
+            description=task.description,
+            task=_serialize_arckit_task(task.task),
+            program_source=task.program.source,
+        )
+
+    @classmethod
+    def deserialize(cls, raw: dict) -> "GeneratedTask":
+        return GeneratedTask(
+            description=raw["description"],
+            task=raw["task"],
+            program=Program.from_source(raw["program_source"]),
+        )
 
 
 def extract_generated_task(msgs: list[dict]) -> GeneratedTask:
@@ -101,12 +139,7 @@ def _extract_program(msg: str) -> Program:
         .strip()
         .replace("from common import", "from arc.dsl.common import")
     )
-
-    local = dict()
-    exec(source_code, local)
-    assert "transform" in local
-    fn = local["transform"]
-    return Program(source_code, fn)
+    return Program.from_source(source_code)
 
 
 def _extract_grids(
