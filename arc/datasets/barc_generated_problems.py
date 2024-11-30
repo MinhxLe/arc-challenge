@@ -9,7 +9,6 @@ import re
 from typing import Callable, List, Tuple
 from datasets import load_dataset
 from arc.core import Grid, Color
-from collections import defaultdict
 
 _DATASET_NAME = "barc0/induction_100k-gpt4-description-gpt4omini-code_generated_problems_messages_format_0.3"
 
@@ -198,6 +197,7 @@ def _color_grid_to_int_grid(raw_grid: List[List[str]]) -> Grid:
         ValueError: If an invalid color name is encountered
     """
     # Create a case-insensitive mapping of color names to enum values
+    # IMPORANT: there are extra mapping bc BARC code base has 2 sets of colors...
     color_map = dict(
         BLACK=Color.BLACK,
         BLUE=Color.BLUE,
@@ -210,6 +210,8 @@ def _color_grid_to_int_grid(raw_grid: List[List[str]]) -> Grid:
         ORANGE=Color.ORANGE,
         TEAL=Color.TEAL,
         MAROON=Color.MAROON,
+        PURPLE=Color.TEAL,
+        BROWN=Color.MAROON,
     )
     # Get grid dimensions
     if not raw_grid or not raw_grid[0]:

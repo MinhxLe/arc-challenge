@@ -1,10 +1,10 @@
 [tool.pyright]
-  exclude = ["tests", "arc_dsl", "scripts"]
+  exclude = ["tests", "arc/dsl", "scripts"]
   venvPath = "."
   venv = ".venv"
 
 [tool.ruff]
-exclude = ["arc_dsl"]
+exclude = ["arc/dsl"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
