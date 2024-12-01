@@ -9,7 +9,7 @@ import pickle as pkl
 import numpy as np
 import re
 from typing import Callable, List, Tuple
-from datasets import Dataset, load_dataset
+from datasets import load_dataset
 from arc.core import Grid, Color
 from loguru import logger
 
@@ -275,9 +275,10 @@ def _color_grid_to_int_grid(raw_grid: List[List[str]]) -> Grid:
     return int_grid
 
 
-def get_parsed_dataset() -> list[GeneratedTask]:
-    if os.path.exists(_PARSED_DATASET_FNAME):
-        with open(_PARSED_DATASET_FNAME, "rb") as f:
+def get_parsed_dataset(cached_fname) -> list[GeneratedTask]:
+    cached_fname = cached_fname or _PARSED_DATASET_FNAME
+    if os.path.exists(cached_fname):
+        with open(cached_fname, "rb") as f:
             raw = pkl.load(f)
             tasks = [GeneratedTask.deserialize(x) for x in raw]
 
@@ -291,6 +292,6 @@ def get_parsed_dataset() -> list[GeneratedTask]:
                 logger.error(f"error on {i}: {e}")
 
         serialized_tasks = [GeneratedTask.serialize(t) for t in tasks]
-        with open(_PARSED_DATASET_FNAME, "wb") as f:
+        with open(cached_fname, "wb") as f:
             pkl.dump(serialized_tasks, f)
     return tasks
