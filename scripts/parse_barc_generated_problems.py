@@ -16,7 +16,7 @@ for i, row in enumerate(dataset["train_sft"]):
     except Exception as e:
         logger.error(f"error on {i}: {e}")
 
-
+# TODO move this into library
 # 97185/97238 managed to be parsed
 # save tasks down with pickle to tmp.pkl
 serialized_tasks = [GeneratedTask.serialize(t) for t in tasks]
