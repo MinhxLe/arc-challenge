@@ -1,6 +1,9 @@
 import numpy as np
-from typing import Tuple
 from arc.core import Color, Grid
+from itertools import islice
+from typing import Iterator, TypeVar, Iterable, Tuple
+
+T = TypeVar("T")  # Generic type for any item
 
 
 def ndarray_to_tuple(array: np.ndarray) -> Tuple:
@@ -36,3 +39,22 @@ def create_color_array(arr: Grid) -> str:
 
     # Join rows with newlines to create final output
     return "\n".join(rows)
+
+
+def batch(iterable: Iterable[T], size: int) -> Iterator[Tuple[T, ...]]:
+    """
+    Batch data into tuples of length `size`. The last batch may be shorter.
+
+    Args:
+        iterable: Any iterable to batch
+        size: Size of each batch
+
+    Returns:
+        Iterator yielding tuples of length `size` or less
+    """
+    iterator = iter(iterable)
+    while True:
+        batch = tuple(islice(iterator, size))
+        if not batch:
+            break
+        yield batch
