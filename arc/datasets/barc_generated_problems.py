@@ -8,14 +8,27 @@ from dataclasses import dataclass
 import pickle as pkl
 import numpy as np
 import re
-from typing import List, Tuple
+from typing import List, Tuple, Callable
 from datasets import load_dataset
 from arc.core import Grid, Color
 from loguru import logger
-from arc.program import Program
 
 _RAW_DATASET_NAME = "barc0/induction_100k-gpt4-description-gpt4omini-code_generated_problems_messages_format_0.3"
 _PARSED_DATASET_FNAME = "tmp/processed/train_barc_generated_problems.pkl"
+
+
+@dataclass
+class Program:
+    source: str
+    fn: Callable[[Grid], Grid]
+
+    @classmethod
+    def from_source(cls, source: str) -> "Program":
+        local = dict()
+        exec(source, local)
+        assert "transform" in local
+        fn = local["transform"]
+        return Program(source, fn)
 
 
 def get_raw_dataset():
