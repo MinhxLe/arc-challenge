@@ -46,7 +46,7 @@ Output a modified program to debug with a difficulty of {difficulty}.
 
 @dataclass
 class Row:
-    task: GeneratedTask
+    generated_task: GeneratedTask
     difficulty: int
     response: openai.RawCompletion[str]
 
@@ -89,12 +89,13 @@ def extract_source(msg: str) -> str:
 
 
 def row_to_dict(row: Row) -> dict:
-    task = row.task.task
+    task = row.generated_task.task
 
     return dict(
+        task_description=row.generated_task.description,
         task=task.to_dict(),
         difficulty=row.difficulty,
-        original_program_source=row.task.program.source,
+        original_program_source=row.generated_task.program.source,
         modified_program_source=extract_source(row.response.completion),
         raw_llm_response=row.response.completion,
     )
@@ -114,3 +115,5 @@ async def main():
         "minhxle/barc-induction-modified-programs-2k",
         dataset,
     )
+
+    # TODO validate the modified program actually changes train or test input/output pair
