@@ -8,17 +8,13 @@ from dataclasses import dataclass
 import pickle as pkl
 import numpy as np
 import re
-from typing import Callable, List, Tuple
+from typing import List, Tuple, Callable
 from datasets import load_dataset
 from arc.core import Grid, Color
 from loguru import logger
 
 _RAW_DATASET_NAME = "barc0/induction_100k-gpt4-description-gpt4omini-code_generated_problems_messages_format_0.3"
 _PARSED_DATASET_FNAME = "tmp/processed/train_barc_generated_problems.pkl"
-
-
-def get_raw_dataset():
-    return load_dataset(_RAW_DATASET_NAME)
 
 
 @dataclass
@@ -33,6 +29,10 @@ class Program:
         assert "transform" in local
         fn = local["transform"]
         return Program(source, fn)
+
+
+def get_raw_dataset():
+    return load_dataset(_RAW_DATASET_NAME)
 
 
 @dataclass
@@ -275,7 +275,7 @@ def _color_grid_to_int_grid(raw_grid: List[List[str]]) -> Grid:
     return int_grid
 
 
-def get_parsed_dataset(cached_fname) -> list[GeneratedTask]:
+def get_parsed_dataset(cached_fname: str | None = None) -> list[GeneratedTask]:
     cached_fname = cached_fname or _PARSED_DATASET_FNAME
     if os.path.exists(cached_fname):
         with open(cached_fname, "rb") as f:
