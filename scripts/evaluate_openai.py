@@ -116,11 +116,3 @@ def solve_task(
         console.save_html(file_path)
 
     return programs
-
-
-train_set, eval_set = arckit.load_data()
-
-task_id = "f3cdc58f"
-task = eval_set[task_id]
-
-programs = solve_task(task, 20, "first_attempt_temp_0")
