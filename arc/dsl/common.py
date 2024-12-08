@@ -1,23 +1,15 @@
 """Common library for ARC"""
 
+from enum import IntEnum
 import numpy as np
 import random
 
 
-class Color:
+class Color(IntEnum):
     """
-    Enum for colors
-
-    Color.BLACK, Color.BLUE, Color.RED, Color.GREEN, Color.YELLOW, Color.GREY, Color.PINK, Color.ORANGE, Color.TEAL, Color.MAROON
-
-    Use Color.ALL_COLORS for `set` of all possible colors
-    Use Color.NOT_BLACK for `set` of all colors except black
-
-    Colors are strings (NOT integers), so you CAN'T do math/arithmetic/indexing on them.
-    (The exception is Color.BLACK, which is 0)
+    Colors are strings (NOT integers), so you CAN'T do math/arithmetic/indexing/ordering on them.
     """
 
-    # The above comments were lies to trick the language model into not treating the colours like ints
     BLACK = 0
     BLUE = 1
     RED = 2
@@ -29,11 +21,24 @@ class Color:
     ORANGE = 7
     TEAL = 8
     MAROON = 9
+
+    # why tho
+    PURPLE = 8
+    BROWN = 9
+
+    # Keep these below BLACK so that Color(0).name returns 'BLACK'
     TRANSPARENT = 0  # sometimes the language model likes to pretend that there is something called transparent/background, and black is a reasonable default
     BACKGROUND = 0
 
-    ALL_COLORS = [BLACK, BLUE, RED, GREEN, YELLOW, GREY, PINK, ORANGE, TEAL, MAROON]
-    NOT_BLACK = [BLUE, RED, GREEN, YELLOW, GREY, PINK, ORANGE, TEAL, MAROON]
+    @classmethod
+    @property
+    def ALL_COLORS(cls) -> list["Color"]:
+        return [c for c in cls]
+
+    @classmethod
+    @property
+    def NOT_BLACK(cls) -> list["Color"]:
+        return [c for c in cls if c != Color.BLACK]
 
 
 def flood_fill(grid, x, y, color, connectivity=4):
@@ -205,9 +210,9 @@ def randomly_scatter_points(grid, color, density=0.5, background=Color.BLACK):
 
 def scale_pattern(pattern, scale_factor):
     """
-    Scales the pattern by the specified factor.
+    scales the pattern by the specified factor.
     """
-    print("scale_pattern: DEPRECATED, switch to scale_sprite")
+    # print("scale_pattern: deprecatED, switch to scale_sprite")
     n, m = pattern.shape
     new_n, new_m = n * scale_factor, m * scale_factor
     new_pattern = np.zeros((new_n, new_m), dtype=pattern.dtype)

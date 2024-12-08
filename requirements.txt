@@ -19,6 +19,7 @@ trl==0.11.4
 wandb>=0.18.5
 
 scipy>=1.12.0
+matplotlib>=3.9.3
 
 # utils
 python-dotenv==1.0.1
@@ -33,7 +34,7 @@ ipython>=7.31.1
 loguru>=0.7.2
 
 # 3p
-openai==1.54.3
+openai==1.55.3
 wandb==0.18.6
 
 # TODO: flash attn
