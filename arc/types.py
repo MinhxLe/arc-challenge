@@ -9,13 +9,45 @@ import numpy as np
 
 
 @dataclass
+class Program:
+    source: str
+    fn: Callable[[core.Grid], core.Grid] | None
+    interpret_error: Exception | None
+
+    @classmethod
+    def from_source(cls, source: str) -> "Program":
+        fn = None
+        interpret_error = None
+        try:
+            local = dict()
+            exec(source, local)
+            assert "transform" in local
+            fn = local["transform"]
+        except Exception as e:
+            interpret_error = e
+
+        return Program(source, fn, interpret_error)
+
+    def call(self, input_: core.Grid) -> core.Grid | Exception:
+        # to prevent side effects
+        input_ = np.copy(input_)
+        if self.fn is None:
+            assert self.interpret_error is not None
+            return self.interpret_error
+        try:
+            return self.fn(input_)
+        except Exception as e:
+            return e
+
+
+@dataclass
 class Evaluation:
     input_: core.Grid
     output: core.Grid | Exception
 
 
 @dataclass
-class Program:
+class ProgramOld:
     task: arckit.Task
     source: str
     fn: Callable[[core.Grid], core.Grid]
