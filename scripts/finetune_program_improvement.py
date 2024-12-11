@@ -9,7 +9,7 @@ from unsloth import FastLanguageModel
 from arc import utils
 from arc.datasets.barc_modified_programs import get_raw_dataset
 from arc.tasks import prompts
-from arc.types import Program, ProgramExecution
+from arc.program import Program, ProgramExecution, remove_comments
 from dataclasses import dataclass
 import numpy as np
 from concurrent.futures import Future, ProcessPoolExecutor
@@ -167,8 +167,10 @@ model = FastLanguageModel.for_inference(model)
 
 def get_baseline_program_improvement():
     tasks = [Task(**r["task"]) for r in dataset]
+    # we strip the comments to remove hints
     intitial_programs = [
-        Program.from_source(r["modified_program_source"]) for r in dataset
+        Program.from_source(remove_comments(r["modified_program_source"]))
+        for r in dataset
     ]
     executions = [
         ProgramExecution(program, task)

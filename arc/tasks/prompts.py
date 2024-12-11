@@ -3,7 +3,7 @@ import arckit
 from arc import core
 from arc.tasks import lib
 from arc.utils import create_color_array
-from arc.types import ProgramExecution
+from arc.program import ProgramExecution
 import numpy as np
 
 
@@ -73,7 +73,7 @@ Write a Python function `transform` that can convert any given input grid to its
 """
 
 
-def _create_program_execution_string(execution: ProgramExecution) -> str:
+def _create_execution_string(execution: ProgramExecution) -> str:
     execution_results = []
     for i, ((input_, expected), output) in enumerate(
         zip(execution.task.train, execution.executions)
@@ -111,7 +111,7 @@ def create_improve_solve_task_prompt(
 
     program_executions = "\n\n\n".join(
         [
-            f"Attempt {i+1}\n{_create_program_execution_string(program)}"
+            f"Attempt {i+1}\n{_create_execution_string(program)}"
             for i, program in enumerate(executions)
         ]
     )
