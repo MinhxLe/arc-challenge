@@ -1,7 +1,3 @@
-"""
-TODO STRIP COMMENTS
-"""
-
 from arckit.data import Task
 import re
 
@@ -17,6 +13,7 @@ import multiprocessing
 from typing import Tuple, Dict, Optional
 from loguru import logger
 import torch
+from tqdm import tqdm
 
 INFERENCE_BATCH_SIZE = 4
 
@@ -27,7 +24,7 @@ class EvaluationSummary:
     train_total: int
 
 
-def evaluate_program(program: Program, task: Task, i: int) -> EvaluationSummary:
+def evaluate_program(program: Program, task: Task, i: int | None) -> EvaluationSummary:
     train_correct = 0
     for input_, output in task.train:
         program_output = program.call(input_)
@@ -153,7 +150,7 @@ def batch_generate_improved_program(
         tokenizer.decode(o[input_length:], skip_special_tokens=True)
         for o in batch_output
     ]
-    return [Program.from_source(code) for code in decoded_batch_output]
+    return [Program.from_source(parse_code(code)) for code in decoded_batch_output]
 
 
 # global set up
@@ -166,23 +163,32 @@ model = FastLanguageModel.for_inference(model)
 
 
 def get_baseline_program_improvement():
-    tasks = [Task(**r["task"]) for r in dataset]
+    SAMPLE_COUNT = 100
+    sampled_dataset = dataset.shuffle().select(range(SAMPLE_COUNT))
+    tasks = [Task(**r["task"]) for r in sampled_dataset]
     # we strip the comments to remove hints
-    intitial_programs = [
+    initial_programs = [
         Program.from_source(remove_comments(r["modified_program_source"]))
-        for r in dataset
+        for r in sampled_dataset
     ]
     executions = [
         ProgramExecution(program, task)
-        for task, program in zip(tasks, intitial_programs)
+        for task, program in zip(tasks, initial_programs)
     ]
-    # we probably want incremental checkpointing here
     improved_programs = []
-    for i, batch_execution in enumerate(utils.batch(executions, INFERENCE_BATCH_SIZE)):
-        logger.debug(f"starting batch {i}")
-        improved_programs.extend(
-            batch_generate_improved_program(model, tokenizer, batch_execution)
-        )
+    for i, batch_execution in tqdm(
+        enumerate(utils.batch(executions, INFERENCE_BATCH_SIZE)),
+        total=SAMPLE_COUNT // INFERENCE_BATCH_SIZE,
+    ):
+        try:
+            improved_programs.extend(
+                batch_generate_improved_program(model, tokenizer, batch_execution)
+            )
+        except Exception:
+            logger.exception(f"failed batch {i}")
+
+    for i, (task, program) in enumerate(zip(tasks, improved_programs)):
+        print(evaluate_program(program, task, i))
 
 
 #
