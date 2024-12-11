@@ -44,7 +44,7 @@ def create_color_array(arr: Grid) -> str:
     return "\n".join(rows)
 
 
-def batch(iterable: Iterable[T], size: int) -> Iterator[Tuple[T, ...]]:
+def batch(iterable: Iterable[T], size: int) -> Iterator[list[T, ...]]:
     """
     Batch data into tuples of length `size`. The last batch may be shorter.
 
@@ -57,7 +57,7 @@ def batch(iterable: Iterable[T], size: int) -> Iterator[Tuple[T, ...]]:
     """
     iterator = iter(iterable)
     while True:
-        batch = tuple(islice(iterator, size))
+        batch = list(islice(iterator, size))
         if not batch:
             break
         yield batch

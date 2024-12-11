@@ -4,8 +4,9 @@ TODO STRIP COMMENTS
 
 from arckit.data import Task
 import re
-from unsloth import FastLanguageModel
 
+from unsloth import FastLanguageModel
+from arc import utils
 from arc.datasets.barc_modified_programs import get_raw_dataset
 from arc.tasks import prompts
 from arc.types import Program, ProgramExecution
@@ -17,8 +18,7 @@ from typing import Tuple, Dict, Optional
 from loguru import logger
 import torch
 
-
-dataset = get_raw_dataset()["train"]
+INFERENCE_BATCH_SIZE = 4
 
 
 @dataclass
@@ -123,20 +123,75 @@ def generate_improved_program(
     return Program.from_source(parse_code(decoded_responses[0]))
 
 
+def batch_generate_improved_program(
+    model,
+    tokenizer,
+    batch_execution: list[ProgramExecution],
+):
+    batch_text = []
+    for execution in batch_execution:
+        messages = [
+            dict(role="system", content=prompts.programmer_role_prompt),
+            dict(
+                role="user",
+                content=prompts.create_improve_solve_task_prompt(
+                    execution.task, [execution]
+                ),
+            ),
+        ]
+        batch_text.append(
+            tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+        )
+    batch_input = tokenizer(batch_text, return_tensors="pt", padding=True).to(
+        device="cuda"
+    )
+    batch_output = model.generate(**batch_input)
+    input_length = batch_input["input_ids"].size(1)
+    decoded_batch_output = [
+        tokenizer.decode(o[input_length:], skip_special_tokens=True)
+        for o in batch_output
+    ]
+    return [Program.from_source(code) for code in decoded_batch_output]
+
+
+# global set up
+dataset = get_raw_dataset()["train"]
 model, tokenizer = FastLanguageModel.from_pretrained(
     "barc0/Llama-3.1-ARC-Potpourri-Induction-8B",
     dtype=torch.bfloat16,
 )
-
 model = FastLanguageModel.for_inference(model)
 
-row = dataset[0]
-task = Task(**row["task"])
-original_program = Program.from_source(row["original_program_source"])
-modified_program = Program.from_source(row["modified_program_source"])
-fixed_program = generate_improved_program(
-    model, tokenizer, task, [ProgramExecution(modified_program, task)]
-)
+
+def get_baseline_program_improvement():
+    tasks = [Task(**r["task"]) for r in dataset]
+    intitial_programs = [
+        Program.from_source(r["modified_program_source"]) for r in dataset
+    ]
+    executions = [
+        ProgramExecution(program, task)
+        for task, program in zip(tasks, intitial_programs)
+    ]
+    # we probably want incremental checkpointing here
+    improved_programs = []
+    for i, batch_execution in enumerate(utils.batch(executions, INFERENCE_BATCH_SIZE)):
+        logger.debug(f"starting batch {i}")
+        improved_programs.extend(
+            batch_generate_improved_program(model, tokenizer, batch_execution)
+        )
+
+
+#
+# row = dataset[0]
+# task = Task(**row["task"])
+# original_program = Program.from_source(row["original_program_source"])
+# modified_program = Program.from_source(row["modified_program_source"])
+# fixed_program = generate_improved_program(
+#     model, tokenizer, task, [ProgramExecution(modified_program, task)]
+# )
+
 
 if __name__ == "__main__":
     # validate_dataset()
