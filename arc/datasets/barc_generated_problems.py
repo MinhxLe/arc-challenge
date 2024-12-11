@@ -8,31 +8,19 @@ from dataclasses import dataclass
 import pickle as pkl
 import numpy as np
 import re
-from typing import List, Tuple, Callable
+from typing import List, Tuple
 from datasets import load_dataset
 from arc.core import Grid, Color
 from loguru import logger
 
-_RAW_DATASET_NAME = "barc0/induction_100k-gpt4-description-gpt4omini-code_generated_problems_messages_format_0.3"
+from arc.program import Program
+
+HF_DATASET_NAME = "barc0/induction_100k-gpt4-description-gpt4omini-code_generated_problems_messages_format_0.3"
 _PARSED_DATASET_FNAME = "tmp/processed/train_barc_generated_problems.pkl"
 
 
-@dataclass
-class Program:
-    source: str
-    fn: Callable[[Grid], Grid]
-
-    @classmethod
-    def from_source(cls, source: str) -> "Program":
-        local = dict()
-        exec(source, local)
-        assert "transform" in local
-        fn = local["transform"]
-        return Program(source, fn)
-
-
 def get_raw_dataset():
-    return load_dataset(_RAW_DATASET_NAME)
+    return load_dataset(HF_DATASET_NAME)
 
 
 @dataclass
@@ -78,6 +66,7 @@ def extract_generated_task(msgs: list[dict]) -> GeneratedTask:
     program = _extract_program(msgs[2]["content"])
     train_input, _, test_input = _extract_grids(msgs[1]["content"])
     # we don't used the parsed trained output
+    assert program.fn is not None
     task = arckit.Task(
         id=None,
         train=[dict(input=i, output=program.fn(i)) for i in train_input],

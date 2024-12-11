@@ -10,7 +10,7 @@ import os
 import numpy as np
 from loguru import logger
 from unsloth import FastLanguageModel
-from arc.types import Program
+from arc.program import Program
 
 
 #  loading in model
@@ -33,7 +33,6 @@ model, tokenizer = FastLanguageModel.from_pretrained(
     "barc0/Llama-3.1-ARC-Potpourri-Induction-8B",
     dtype=torch.bfloat16,
 )
-
 
 model = FastLanguageModel.for_inference(model)
 

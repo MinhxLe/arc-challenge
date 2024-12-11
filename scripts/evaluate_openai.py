@@ -8,7 +8,7 @@ import os
 from loguru import logger
 
 from arc.external import openai
-from arc.types import Program
+from arc.program import Program
 
 SOLUTION_DIR = "data/openai/code_generation"
 os.makedirs(SOLUTION_DIR, exist_ok=True)
