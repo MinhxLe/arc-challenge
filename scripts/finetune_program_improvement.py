@@ -1,12 +1,21 @@
+"""
+TODO STRIP COMMENTS
+"""
+
 from arckit.data import Task
+import re
+from unsloth import FastLanguageModel
+
 from arc.datasets.barc_modified_programs import get_raw_dataset
-from arc.types import Program
+from arc.tasks import prompts
+from arc.types import Program, ProgramExecution
 from dataclasses import dataclass
 import numpy as np
 from concurrent.futures import Future, ProcessPoolExecutor
 import multiprocessing
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Optional
 from loguru import logger
+import torch
 
 
 dataset = get_raw_dataset()["train"]
@@ -78,5 +87,57 @@ def validate_dataset():
             logger.error(e)
 
 
+def parse_code(response: str) -> Optional[str]:
+    # Extract code between Python code blocks
+    code_match = re.search(r"```python\n(.*?)```", response, re.DOTALL)
+
+    if code_match is None:
+        return None
+    else:
+        return (
+            code_match.group(1)
+            .strip()
+            .replace("from common import", "from arc.dsl.common import")
+        )
+
+
+def generate_improved_program(
+    model, tokenizer, task, executions: list[ProgramExecution]
+) -> Program:
+    messages = [
+        dict(role="system", content=prompts.programmer_role_prompt),
+        dict(
+            role="user",
+            content=prompts.create_improve_solve_task_prompt(task, executions),
+        ),
+    ]
+    chat_text = tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )
+    inputs = tokenizer(chat_text, return_tensors="pt").to(device="cuda")
+    outputs = model.generate(**inputs, temperature=0.8, num_return_sequences=1)
+    input_length = inputs["input_ids"].size(1)
+    decoded_responses = [
+        tokenizer.decode(o[input_length:], skip_special_tokens=True) for o in outputs
+    ]
+    return Program.from_source(parse_code(decoded_responses[0]))
+
+
+model, tokenizer = FastLanguageModel.from_pretrained(
+    "barc0/Llama-3.1-ARC-Potpourri-Induction-8B",
+    dtype=torch.bfloat16,
+)
+
+model = FastLanguageModel.for_inference(model)
+
+row = dataset[0]
+task = Task(**row["task"])
+original_program = Program.from_source(row["original_program_source"])
+modified_program = Program.from_source(row["modified_program_source"])
+fixed_program = generate_improved_program(
+    model, tokenizer, task, [ProgramExecution(modified_program, task)]
+)
+
 if __name__ == "__main__":
-    validate_dataset()
+    # validate_dataset()
+    pass

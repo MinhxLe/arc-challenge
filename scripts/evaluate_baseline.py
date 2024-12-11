@@ -34,7 +34,6 @@ model, tokenizer = FastLanguageModel.from_pretrained(
     dtype=torch.bfloat16,
 )
 
-
 model = FastLanguageModel.for_inference(model)
 
 

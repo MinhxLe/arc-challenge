@@ -13,7 +13,7 @@ from unsloth import FastLanguageModel
 from datetime import datetime
 from datasets import load_dataset
 
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+timestamp = datetime.now().strfti_create_input_error_stringme("%Y%m%d_%H%M%S")
 run_name = f"llama_3_1_8b_lora_barc_finetune_{timestamp}"
 output_dir = f"tmp/runs/{run_name}"
 

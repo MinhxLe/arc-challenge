@@ -41,32 +41,21 @@ class Program:
 
 
 @dataclass
-class Evaluation:
-    input_: core.Grid
-    output: core.Grid | Exception
-
-
-@dataclass
-class ProgramOld:
+class ProgramExecution:
+    program: Program
     task: arckit.Task
-    source: str
-    fn: Callable[[core.Grid], core.Grid]
 
     @cached_property
-    def evaluations(self) -> list[core.Grid | Exception]:
-        evaluations = []
+    def executions(self) -> list[core.Grid | Exception]:
+        evaluations = [self.program.call(input_) for input_, _ in self.task.train]
         for input_, _ in self.task.train:
-            try:
-                output = self.fn(input_)
-            except Exception as e:
-                output = e
-            evaluations.append(output)
+            evaluations.append(self.program.call(input_))
         return evaluations
 
     @cached_property
     def training_success(self) -> bool:
         training_successes = []
-        for (_, output_), evaluation in zip(self.task.train, self.evaluations):
+        for (_, output_), evaluation in zip(self.task.train, self.executions):
             if isinstance(evaluation, Exception):
                 this_training_success = False
             else:
@@ -76,7 +65,7 @@ class ProgramOld:
 
     def create_result_table(self) -> Table:
         table = Table()
-        actual = self.evaluations
+        actual = self.executions
         expected = [t[1] for t in self.task.train]
         table.add_row(*[arckit.fmt_grid(x) for x in actual])
         table.add_section()

@@ -3,7 +3,7 @@ import arckit
 from arc import core
 from arc.tasks import lib
 from arc.utils import create_color_array
-from arc.types import Program
+from arc.types import ProgramExecution
 import numpy as np
 
 
@@ -73,37 +73,34 @@ Write a Python function `transform` that can convert any given input grid to its
 """
 
 
-def _create_progam_execution_string(program: Program) -> str:
-    evaluation_results = []
-    for i, ((input_, expected), evaluation) in enumerate(
-        zip(program.task.train, program.evaluations)
+def _create_program_execution_string(execution: ProgramExecution) -> str:
+    execution_results = []
+    for i, ((input_, expected), output) in enumerate(
+        zip(execution.task.train, execution.executions)
     ):
-        if isinstance(evaluation, Exception):
-            execution_str = _create_input_error_string(input_, evaluation)
+        if isinstance(output, Exception):
+            execution_str = _create_input_error_string(input_, output)
             correct = False
         else:
-            # TODO this isn't working
-            # assert isinstance(evaluation, core.Grid)
-            execution_str = _create_input_output_string(input_, evaluation)
-            correct = expected.shape == evaluation.shape and np.all(
-                expected == evaluation
-            )
-        evaluation_results.append(
+            assert isinstance(output, np.ndarray)
+            execution_str = _create_input_output_string(input_, output)
+            correct = expected.shape == output.shape and np.all(expected == output)
+        execution_results.append(
             f"{'Correct' if correct else 'Wrong'} Execution of Example {i+1}\n{execution_str}"
         )
-    evaluation_result_str = "\n\n".join(evaluation_results)
+    execution_result_str = "\n\n".join(execution_results)
 
     return f"""```python
-{program.source}
+{execution.program.source}
 ```
 
 Here are execution results of this program.
-{evaluation_result_str}"""
+{execution_result_str}"""
 
 
 def create_improve_solve_task_prompt(
     task: arckit.Task,
-    programs: list[Program],
+    executions: list[ProgramExecution],
 ) -> str:
     training_examples = "\n\n\n".join(
         [
@@ -114,8 +111,8 @@ def create_improve_solve_task_prompt(
 
     program_executions = "\n\n\n".join(
         [
-            f"Program {i+1}\n{_create_progam_execution_string(program)}"
-            for i, program in enumerate(programs)
+            f"Attempt {i+1}\n{_create_program_execution_string(program)}"
+            for i, program in enumerate(executions)
         ]
     )
     return f"""Given input-output grid pairs as reference examples, carefully observe the patterns to predict the output grid for new test input. Each pair follows the same transformation rule. Grids are 2D arrays represented as strings, with cells (colors) separated by spaces and rows by newlines.
@@ -132,7 +129,7 @@ Here are previous attempts of an implementation and their execution result.
 {program_executions}
 
 Iterate on previous versions of Python function `transform` so that there will be more correct executions.
-Pay attention to the wrong executions of Example cases to discover and correct flaws in previous versions of `transform`.
+Pay attention to the wrong executions of Example cases to discover and correct flaws in previous versions of `transform`. Output only the python code.
 """
 
 
