@@ -149,6 +149,7 @@ dependencies = [
     { name = "arckit" },
     { name = "datasets" },
     { name = "drawsvg", extra = ["all"] },
+    { name = "flash-attn" },
     { name = "ipython" },
     { name = "loguru" },
     { name = "matplotlib" },
@@ -166,7 +167,6 @@ dependencies = [
     { name = "torchaudio" },
     { name = "torchtune" },
     { name = "torchvision" },
-    { name = "transformers" },
     { name = "trl" },
     { name = "unsloth", extra = ["cu121-torch230"] },
     { name = "wandb" },
@@ -177,6 +177,7 @@ requires-dist = [
     { name = "arckit", specifier = ">=0.1.0" },
     { name = "datasets", specifier = ">=2.17.1" },
     { name = "drawsvg", extras = ["all"], specifier = ">=2.4.0" },
+    { name = "flash-attn", specifier = ">=2.7.2.post1" },
     { name = "ipython", specifier = ">=7.31.1" },
     { name = "loguru", specifier = ">=0.7.2" },
     { name = "matplotlib", specifier = ">=3.9.3" },
@@ -194,7 +195,6 @@ requires-dist = [
     { name = "torchaudio", specifier = "==2.3.1" },
     { name = "torchtune", specifier = "==0.3.1" },
     { name = "torchvision", specifier = "==0.18.1" },
-    { name = "transformers", specifier = ">=4.39.0" },
     { name = "trl", specifier = "==0.11.4" },
     { name = "unsloth", extras = ["cu121-torch230"], git = "https://github.com/unslothai/unsloth.git" },
     { name = "wandb", specifier = "==0.18.6" },
@@ -625,6 +625,15 @@ all = [
 ]
 
 [[package]]
+name = "einops"
+version = "0.8.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/79/ca/9f5dcb8bead39959454c3912266bedc4c315839cee0e0ca9f4328f4588c1/einops-0.8.0.tar.gz", hash = "sha256:63486517fed345712a8385c100cb279108d9d47e6ae59099b07657e983deae85", size = 58861 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/44/5a/f0b9ad6c0a9017e62d4735daaeb11ba3b6c009d69a26141b258cd37b5588/einops-0.8.0-py3-none-any.whl", hash = "sha256:9572fb63046264a862693b0a87088af3bdc8c068fde03de63453cbbde245465f", size = 43223 },
+]
+
+[[package]]
 name = "executing"
 version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -641,6 +650,16 @@ sdist = { url = "https://files.pythonhosted.org/packages/9d/db/3ef5bb276dae18d6e
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b9/f8/feced7779d755758a52d1f6635d990b8d98dc0a29fa568bbe0625f18fdf3/filelock-3.16.1-py3-none-any.whl", hash = "sha256:2082e5703d51fbf98ea75855d9d5527e33d8ff23099bec374a134febee6946b0", size = 16163 },
 ]
+
+[[package]]
+name = "flash-attn"
+version = "2.7.2.post1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "einops" },
+    { name = "torch" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/83/29/48df18cb51902a7cb7a0ee13327bb2cf50b6ba24bd2e8283d0a9538dde52/flash_attn-2.7.2.post1.tar.gz", hash = "sha256:574897afeb6cbd63e78a612dded95491efe4a46818245cf1a5ace7357d993faa", size = 3136637 }
 
 [[package]]
 name = "fonttools"

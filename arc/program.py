@@ -39,6 +39,7 @@ class Program:
             output = self.fn(input_)
             # this is kind of jank but we want to do sanitization
             assert np.all(output < len(core.Color))
+            assert np.all(output >= 0)
             return output
         except Exception as e:
             return e
