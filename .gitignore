@@ -37,3 +37,4 @@ gpu_names_cache.json
 tmp/
 
 **/.ipynb_checkpoints
+wandb/
