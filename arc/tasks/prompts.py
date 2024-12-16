@@ -7,6 +7,12 @@ from arc.program import ProgramExecution
 import numpy as np
 
 
+def create_python_source_string(source: str) -> str:
+    return f"""```python
+{source}
+```"""
+
+
 puzzlemaker_role_prompt = """
 You are a puzzle maker designing geometric, physical, and topological
 visual puzzles for curious middle-schoolers.
@@ -26,16 +32,11 @@ Where you can, you will use existing code such as the two libraries provided bel
 
 You are given access to the following python code.
 arc/core.py
-```python
-{inspect.getsource(core)}
-```
+{create_python_source_string(inspect.getsource(core))}
 
 arc/tasks/lib.py
 The following are just function signatures.
-```python
-{inspect.getsource(lib)}
-```
-"""
+{create_python_source_string(inspect.getsource(lib))}"""
 
 programmer_role_prompt = f"""
 {puzzlemaker_role_prompt}. {programming_addendum}
@@ -90,9 +91,7 @@ def _create_execution_string(execution: ProgramExecution) -> str:
         )
     execution_result_str = "\n\n".join(execution_results)
 
-    return f"""```python
-{execution.program.source}
-```
+    return f"""{create_python_source_string(execution.program.source)}
 
 Here are execution results of this program.
 {execution_result_str}"""

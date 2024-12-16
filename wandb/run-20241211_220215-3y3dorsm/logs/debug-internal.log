@@ -1,0 +1,8 @@
+{"time":"2024-12-11T22:02:15.711226545-08:00","level":"INFO","msg":"using version","core version":"0.18.6"}
+{"time":"2024-12-11T22:02:15.711256882-08:00","level":"INFO","msg":"created symlink","path":"/home/minh/projects/arc-challenge/wandb/run-20241211_220215-3y3dorsm/logs/debug-core.log"}
+{"time":"2024-12-11T22:02:15.817098368-08:00","level":"INFO","msg":"created new stream","id":"3y3dorsm"}
+{"time":"2024-12-11T22:02:15.817132482-08:00","level":"INFO","msg":"stream: started","id":"3y3dorsm"}
+{"time":"2024-12-11T22:02:15.817166525-08:00","level":"INFO","msg":"handler: started","stream_id":{"value":"3y3dorsm"}}
+{"time":"2024-12-11T22:02:15.817418388-08:00","level":"INFO","msg":"sender: started","stream_id":"3y3dorsm"}
+{"time":"2024-12-11T22:02:15.817422916-08:00","level":"INFO","msg":"writer: Do: started","stream_id":{"value":"3y3dorsm"}}
+{"time":"2024-12-11T22:02:16.07439428-08:00","level":"INFO","msg":"Starting system monitor"}

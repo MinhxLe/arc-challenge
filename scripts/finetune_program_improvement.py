@@ -1,9 +1,12 @@
+from datetime import datetime
 from arckit.data import Task
-import re
+from arc import settings
+from transformers import TrainingArguments
 
+from trl import SFTTrainer
 from unsloth import FastLanguageModel
 from arc import utils
-from arc.datasets.barc_modified_programs import get_raw_dataset
+from arc.datasets.barc_modified_programs import get_finetune_dataset
 from arc.tasks import prompts
 from arc.program import Program, ProgramExecution, remove_comments
 from dataclasses import dataclass
@@ -16,6 +19,14 @@ import torch
 from tqdm import tqdm
 
 INFERENCE_BATCH_SIZE = 4
+
+# global set up
+# dataset = get_raw_dataset()["train"]
+# model, tokenizer = FastLanguageModel.from_pretrained(
+#     "barc0/Llama-3.1-ARC-Potpourri-Induction-8B",
+#     dtype=torch.bfloat16,
+# )
+# model = FastLanguageModel.for_inference(model)
 
 
 @dataclass
@@ -153,15 +164,7 @@ def batch_generate_improved_program(
     return [Program.from_source(parse_code(code)) for code in decoded_batch_output]
 
 
-# global set up
-dataset = get_raw_dataset()["train"]
-model, tokenizer = FastLanguageModel.from_pretrained(
-    "barc0/Llama-3.1-ARC-Potpourri-Induction-8B",
-    dtype=torch.bfloat16,
-)
-model = FastLanguageModel.for_inference(model)
-
-
+########
 def get_baseline_program_improvement():
     SAMPLE_COUNT = 100
     sampled_dataset = dataset.shuffle().select(range(SAMPLE_COUNT))
@@ -191,16 +194,65 @@ def get_baseline_program_improvement():
         print(evaluate_program(program, task, i))
 
 
-#
-# row = dataset[0]
-# task = Task(**row["task"])
-# original_program = Program.from_source(row["original_program_source"])
-# modified_program = Program.from_source(row["modified_program_source"])
-# fixed_program = generate_improved_program(
-#     model, tokenizer, task, [ProgramExecution(modified_program, task)]
-# )
+########
 
 
-if __name__ == "__main__":
-    # validate_dataset()
-    pass
+def finetune_model():
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_name = f"barc_program_improvement_2k_finetune_{timestamp}"
+    output_dir = f"tmp/runs/{run_name}"
+
+    dataset = get_finetune_dataset()["train"]
+
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        "barc0/Llama-3.1-ARC-Potpourri-Induction-8B",
+        # dtype=torch.bfloat16,
+        # "unsloth/Meta-Llama-3.1-8B-Instruct",
+        dtype=torch.bfloat16,
+        token=settings.HF_API_TOKEN,
+    )
+    model = FastLanguageModel.get_peft_model(
+        model,
+        r=64,
+        target_modules=[
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
+        ],
+        lora_alpha=64,
+        lora_dropout=0,
+        bias="none",  # Supports any, but = "none" is optimized
+        # [NEW] "unsloth" uses 30% less VRAM, fits 2x larger batch sizes!
+        use_gradient_checkpointing=True,
+        random_state=3407,
+    )
+
+    trainer = SFTTrainer(
+        model=model,
+        tokenizer=tokenizer,
+        train_dataset=dataset,
+        args=TrainingArguments(
+            run_name=run_name,
+            output_dir=output_dir,
+            per_device_train_batch_size=8,
+            gradient_accumulation_steps=2,
+            warmup_steps=0,
+            num_train_epochs=3,  # Set this for 1 full training run.
+            learning_rate=2e-4,
+            fp16=not torch.cuda.is_bf16_supported(),
+            bf16=torch.cuda.is_bf16_supported(),
+            logging_steps=1,
+            optim="adamw_torch_fused",
+            save_strategy="epoch",
+            weight_decay=0.0,
+            lr_scheduler_type="cosine",
+            seed=3407,
+            report_to="wandb",
+        ),
+    )
+
+    trainer.train()
