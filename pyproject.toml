@@ -8,7 +8,7 @@ dependencies = [
     "arckit>=0.1.0",
     "datasets>=2.17.1",
     "drawsvg[all]>=2.4.0",
-    "flash-attn>=2.7.2.post1",
+    "flash-attn==2.6.3",
     "ipython>=7.31.1",
     "loguru>=0.7.2",
     "matplotlib>=3.9.3",
@@ -52,5 +52,6 @@ unsloth = { git = "https://github.com/unslothai/unsloth.git" }
 [dependency-groups]
 dev = [
     "arc",
+    "ipdb>=0.13.13",
 ]
 
