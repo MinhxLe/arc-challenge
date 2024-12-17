@@ -149,7 +149,6 @@ dependencies = [
     { name = "arckit" },
     { name = "datasets" },
     { name = "drawsvg", extra = ["all"] },
-    { name = "flash-attn" },
     { name = "ipython" },
     { name = "loguru" },
     { name = "matplotlib" },
@@ -168,13 +167,17 @@ dependencies = [
     { name = "torchtune" },
     { name = "torchvision" },
     { name = "trl" },
-    { name = "unsloth", extra = ["cu121-torch230"] },
     { name = "wandb" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "arc" },
     { name = "ipdb" },
+]
+gpu = [
+    { name = "flash-attn" },
+    { name = "unsloth", extra = ["cu121-torch230"] },
 ]
 
 [package.metadata]
@@ -182,7 +185,6 @@ requires-dist = [
     { name = "arckit", specifier = ">=0.1.0" },
     { name = "datasets", specifier = ">=2.17.1" },
     { name = "drawsvg", extras = ["all"], specifier = ">=2.4.0" },
-    { name = "flash-attn", specifier = "==2.6.3" },
     { name = "ipython", specifier = ">=7.31.1" },
     { name = "loguru", specifier = ">=0.7.2" },
     { name = "matplotlib", specifier = ">=3.9.3" },
@@ -201,7 +203,6 @@ requires-dist = [
     { name = "torchtune", specifier = "==0.3.1" },
     { name = "torchvision", specifier = "==0.18.1" },
     { name = "trl", specifier = "==0.11.4" },
-    { name = "unsloth", extras = ["cu121-torch230"], git = "https://github.com/unslothai/unsloth.git" },
     { name = "wandb", specifier = "==0.18.6" },
 ]
 
@@ -209,6 +210,10 @@ requires-dist = [
 dev = [
     { name = "arc", virtual = "." },
     { name = "ipdb", specifier = ">=0.13.13" },
+]
+gpu = [
+    { name = "flash-attn", specifier = "==2.6.3" },
+    { name = "unsloth", extras = ["cu121-torch230"], git = "https://github.com/unslothai/unsloth.git" },
 ]
 
 [[package]]
