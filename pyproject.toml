@@ -50,6 +50,7 @@ unsloth = { git = "https://github.com/unslothai/unsloth.git" }
 dev = [
     "arc",
     "ipdb>=0.13.13",
+    "pytest>=8.3.4",
 ]
 gpu = [
     "unsloth[cu121-torch230]",
