@@ -1,4 +1,4 @@
-import typing as ta
+from dataclasses import dataclass
 from enum import IntEnum
 import numpy as np
 
@@ -8,7 +8,22 @@ MIN_GRID_HEIGHT = 1
 MAX_GRID_HEIGHT = 30
 
 # Tuple of width and height and each entry is an integer representing the color.
-Grid = np.ndarray[ta.Tuple[int, int], np.dtype[np.integer]]
+Grid = np.ndarray  # [ta.Tuple[int, int], np.dtype[np.integer]]
+
+
+@dataclass
+class Example:
+    input_: Grid
+    output: Grid
+
+
+@dataclass
+class Task:
+    train_set: list[Example]
+    test: Example
+
+    def to_arckit(self):
+        raise NotImplementedError
 
 
 class Color(IntEnum):
