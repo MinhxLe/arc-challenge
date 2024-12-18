@@ -19,6 +19,7 @@ class Example:
 
 @dataclass
 class Task:
+    id: str | None
     train_set: list[Example]
     test: Example
 
