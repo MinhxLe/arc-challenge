@@ -11,8 +11,9 @@ class Transform(abc.ABC):
     def apply(self, grid: Grid) -> Grid:
         pass
 
+    @property
     @abc.abstractmethod
-    def inverse_apply(self, grid: Grid) -> Grid:
+    def inverse(self) -> "Transform":
         pass
 
 
@@ -30,8 +31,9 @@ class Rotate(Transform):
     def apply(self, grid: Grid) -> Grid:
         return np.rot90(grid, k=self.k)
 
-    def inverse_apply(self, grid: Grid) -> Grid:
-        return np.rot90(grid, k=-self.k)
+    @property
+    def inverse(self) -> "Rotate":
+        return Rotate(k=-self.k)
 
 
 @dataclass
@@ -49,8 +51,9 @@ class Reflect(Transform):
             case self.Type.VERTICAL:
                 return np.flip(grid, 1)
 
-    def inverse_apply(self, grid: Grid) -> Grid:
-        return self.apply(grid)
+    @property
+    def inverse(self) -> "Reflect":
+        return self
 
 
 @dataclass
@@ -62,14 +65,13 @@ class MapColor(Transform):
         assert Color.BLACK not in self.mapping.keys()
         assert Color.BLACK not in self.mapping.values()
         assert len(self.mapping) == set(self.mapping.keys())
-        self.inverse_mapping = {v: k for k, v in self.mapping.items()}
-        assert len(self.mapping) == len(self.inverse_mapping)
 
     def apply(self, grid: Grid) -> Grid:
         return self._apply_mapping(grid, self.mapping)
 
-    def inverse_apply(self, grid: Grid) -> Grid:
-        return self._apply_mapping(grid, self.inverse_mapping)
+    @property
+    def inverse(self) -> "MapColor":
+        return MapColor({v: k for v, k in self.mapping.items()})
 
     @classmethod
     def _apply_mapping(cls, grid: Grid, mapping: dict[Color, Color]) -> Grid:
@@ -85,9 +87,8 @@ class Compose(Transform):
             grid = t.apply(grid)
         return grid
 
-    def inverse_apply(self, grid: Grid) -> Grid:
+    @property
+    def inverse(self) -> "Compose":
         # [IMPORANT] this is not 100% correct because this assumes that transforms
         # are commutative and D8 is not a commutative group.
-        for t in reversed(self.transforms):
-            grid = t.inverse_apply(grid)
-        return grid
+        return Compose(list(reversed(self.transforms)))
