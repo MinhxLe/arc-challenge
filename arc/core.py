@@ -17,6 +17,16 @@ class Example:
     input_: Grid
     output: Grid
 
+    @classmethod
+    def from_dict(cls, example_dict: dict) -> "Example":
+        return Example(
+            input_=np.array(example_dict["input"]),
+            output=np.array(example_dict["output"]),
+        )
+
+    def to_dict(self) -> dict:
+        return dict(input=self.input_.tolist(), output=self.output.tolist())
+
 
 @dataclass
 class Task:
@@ -33,6 +43,20 @@ class Task:
 
     def show(self, show_test_output: bool = False) -> None:
         self.to_arckit().show(answer=show_test_output)
+
+    @classmethod
+    def from_dict(cls, task_dict: dict) -> "Task":
+        return Task(
+            id=task_dict.get("id", None),
+            train_set=[Example.from_dict(x) for x in task_dict["train"]],
+            test_set=[Example.from_dict(x) for x in task_dict["test"]],
+        )
+
+    def to_dict(self) -> dict:
+        return dict(
+            train=[e.to_dict() for e in self.train_set],
+            test=[e.to_dict() for e in self.test_set],
+        )
 
 
 class Color(IntEnum):

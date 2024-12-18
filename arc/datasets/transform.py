@@ -1,93 +1,63 @@
-import abc
-from dataclasses import dataclass
-from enum import Enum, auto
+"""
+utils that datasets and generates derived datasets
+"""
+
+import multiprocessing
+import random
+from datasets import Dataset
 import numpy as np
-
-from arc.core import Color, Grid
-
-
-class Transform(abc.ABC):
-    @abc.abstractmethod
-    def apply(self, grid: Grid) -> Grid:
-        pass
-
-    @abc.abstractmethod
-    def inverse_apply(self, grid: Grid) -> Grid:
-        pass
+from typing import Callable
+from arc.transform import Transform
+from datasets import concatenate_datasets
 
 
-@dataclass
-class Rotate(Transform):
-    """
-    90 degree counterclockwise rotation
-    """
-
-    k: int
-
-    def __post_init__(self):
-        assert -3 <= self.k <= 3
-
-    def apply(self, grid: Grid) -> Grid:
-        return np.rot90(grid, k=self.k)
-
-    def inverse_apply(self, grid: Grid) -> Grid:
-        return np.rot90(grid, k=-self.k)
+def sample(dataset: Dataset, n: int, seed: int = 42) -> Dataset:
+    assert len(dataset) >= n
+    return dataset.shuffle(seed=seed).select(range(n))
 
 
-@dataclass
-class Reflect(Transform):
-    class Type(Enum):
-        VERTICAL = auto()
-        HORIZONTAL = auto()
-
-    type_: Type
-
-    def apply(self, grid: Grid) -> Grid:
-        match self.type_:
-            case self.Type.HORIZONTAL:
-                return np.flip(grid, 0)
-            case self.Type.VERTICAL:
-                return np.flip(grid, 1)
-
-    def inverse_apply(self, grid: Grid) -> Grid:
-        return self.apply(grid)
+def concat(*datasets: Dataset) -> Dataset:
+    return concatenate_datasets(datasets)
 
 
-@dataclass
-class MapColor(Transform):
-    mapping: dict[Color, Color]
-
-    def __post_init__(self):
-        # we don't want to allow mapping background
-        assert Color.BLACK not in self.mapping.keys()
-        assert Color.BLACK not in self.mapping.values()
-        assert len(self.mapping) == set(self.mapping.keys())
-        self.inverse_mapping = {v: k for k, v in self.mapping.items()}
-        assert len(self.mapping) == len(self.inverse_mapping)
-
-    def apply(self, grid: Grid) -> Grid:
-        return self._apply_mapping(grid, self.mapping)
-
-    def inverse_apply(self, grid: Grid) -> Grid:
-        return self._apply_mapping(grid, self.inverse_mapping)
-
-    @classmethod
-    def _apply_mapping(cls, grid: Grid, mapping: dict[Color, Color]) -> Grid:
-        return np.vectorize(lambda x: mapping.get(x, x))(grid)
+def map_dataset(dataset: Dataset, fn: Callable) -> Dataset:
+    return dataset.map(fn, num_proc=multiprocessing.cpu_count())
 
 
-@dataclass
-class Compose(Transform):
-    transforms: list[Transform]
+def shuffle_train_order(dataset: Dataset, seed: int = 42) -> Dataset:
+    random.seed(seed)
 
-    def apply(self, grid: Grid) -> Grid:
-        for t in self.transforms:
-            grid = t.apply(grid)
-        return grid
+    def shuffle(row):
+        random.shuffle(row["train"])
+        return row
 
-    def inverse_apply(self, grid: Grid) -> Grid:
-        # [IMPORANT] this is not 100% correct because this assumes that transforms
-        # are commutative and D8 is not a commutative group.
-        for t in reversed(self.transforms):
-            grid = t.inverse_apply(grid)
-        return grid
+    return map_dataset(dataset, shuffle)
+
+
+def apply_transform(
+    dataset: Dataset,
+    transform: Transform,
+    input_only: bool = False,
+) -> Dataset:
+    def apply_transform(row):
+        new_train = []
+        for example in row["train"]:
+            input_ = transform.apply(np.array(example["input"]))
+            if input_only:
+                output = example["output"]
+            else:
+                output = transform.apply(np.array(example["output"]))
+            new_train.append(dict(input=input_, output=output))
+        row["train"] = new_train
+        new_test = []
+        for example in row["test"]:
+            input_ = transform.apply(np.array(example["input"]))
+            if input_only:
+                output = example["output"]
+            else:
+                output = transform.apply(np.array(example["output"]))
+            new_test.append(dict(input=input_, output=output))
+        row["test"] = new_test
+        return row
+
+    return map_dataset(dataset, apply_transform)
