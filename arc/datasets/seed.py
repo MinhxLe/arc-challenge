@@ -1,3 +1,7 @@
+"""
+refers to all seed datasets
+"""
+
 import abc
 from dataclasses import dataclass
 from typing import ClassVar, Literal
@@ -117,7 +121,7 @@ class ARCHeavyHandler(DatasetHandler):
         )
 
 
-class Handlers:
+class Datasets:
     arc_public_train = ArckitHandler("train")
     arc_public_test = ArckitHandler("test")
     concept_arc = ConceptARCHandler()
