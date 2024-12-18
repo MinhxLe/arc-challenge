@@ -61,7 +61,9 @@ class MapColor(Transform):
         # we don't want to allow mapping background
         assert Color.BLACK not in self.mapping.keys()
         assert Color.BLACK not in self.mapping.values()
+        assert len(self.mapping) == set(self.mapping.keys())
         self.inverse_mapping = {v: k for k, v in self.mapping.items()}
+        assert len(self.mapping) == len(self.inverse_mapping)
 
     def apply(self, grid: Grid) -> Grid:
         return self._apply_mapping(grid, self.mapping)

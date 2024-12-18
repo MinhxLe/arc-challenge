@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import IntEnum
+import arckit
 import numpy as np
 
 MIN_GRID_WIDTH = 1
@@ -21,10 +22,17 @@ class Example:
 class Task:
     id: str | None
     train_set: list[Example]
-    test: Example
+    test_set: list[Example]
 
-    def to_arckit(self):
-        raise NotImplementedError
+    def to_arckit(self) -> arckit.Task:
+        return arckit.Task(
+            id=self.id,
+            train=[dict(input=x.input_, output=x.output) for x in self.train_set],
+            test=[dict(input=x.input_, output=x.output) for x in self.test_set],
+        )
+
+    def show(self, show_test_output: bool = False) -> None:
+        self.to_arckit().show(answer=show_test_output)
 
 
 class Color(IntEnum):
