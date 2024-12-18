@@ -17,9 +17,12 @@ class FineTuningConfig:
     lora_rank: int
     lora_alpha: int
     lora_dropout: float
+    use_rslora: bool
     target_modules: list[str]
     peft_random_state: int
     sftt_random_state: int | None
+    bias: str = "none"
+    loftq_config = None
 
     per_device_train_batch_size: int = 8
     gradient_accumulation_steps: int = 1
@@ -34,6 +37,14 @@ class FineTuningConfig:
     report_to: str = "wandb"
 
     def __post_init__(self):
+        if self.load_in_4bit and self.loftq_config:
+            raise ValueError(
+                "expected loftq_config to be None if load_in_4bit because quantization already in base model"
+            )
+
+        if self.model_dtype and self.load_in_4bit:
+            raise ValueError("expected model_dtype to be None if load_in_4bit")
+
         if self.lora_alpha > self.lora_rank:
             raise ValueError(
                 f"lora_alpha ({self.lora_alpha}) must be <= lora_rank ({self.lora_rank})"
