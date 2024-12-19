@@ -1,0 +1,52 @@
+from arc.training import (
+    FineTuningConfig,
+    FineTuningDataConfig,
+    FineTuningModelConfig,
+    FineTuningSFTTConfig,
+    FineTuningLoraConfig,
+)
+
+config = FineTuningConfig(
+    name="arcitects",
+    model_config=FineTuningModelConfig(
+        model="nvidia/Mistral-NeMo-Minitron-8B-Base",
+        model_dtype=None,
+        load_in_4bit=True,
+    ),
+    data_config=FineTuningDataConfig(
+        dataset_name="barc0/induction_100k_gpt4o-mini_generated_problems_seed100.jsonl_messages_format_0.3",
+        dataset_split="train_sft",
+    ),
+    lora_config=FineTuningLoraConfig(
+        lora_rank=256,
+        lora_alpha=24,
+        lora_dropout=0,
+        use_rslora=True,
+        target_modules=[
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
+            "embed_tokens",
+            "lm_head",
+        ],
+        random_state=42,
+    ),
+    sftt_config=FineTuningSFTTConfig(
+        random_state=42,
+        per_device_train_batch_size=4,
+        gradient_accumulation_steps=2,
+        warmup_ratio=0.25,
+        warmup_steps=0,
+        num_train_epochs=1,
+        learning_rate=1e-4,
+        embedding_learning_rate=1e-5,
+        weight_decay=0,
+        lr_scheduler_type="cosine",
+        logging_steps=10,
+        optimizer="adamw_8bit",
+    ),
+)
