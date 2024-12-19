@@ -1,1 +1,1 @@
-from arcitects import config as arcitects_config  # noqa: F401
+from config.fine_tuning_config.architects import config as architects_config  # noqa: F401
