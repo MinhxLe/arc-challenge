@@ -21,7 +21,7 @@ class FineTuningDataConfig:
 
 
 @dataclass
-class LoraConfig:
+class FineTuningLoraConfig:
     lora_rank: int
     lora_alpha: int
     lora_dropout: float
@@ -30,6 +30,9 @@ class LoraConfig:
     random_state: int
     bias: str = "none"
     loftq_config = None
+
+    # unused
+    # use_gradient_checkpointing=True, setting to True in outer
 
     def __post_init__(self):
         if self.use_rslora:
@@ -79,7 +82,7 @@ class FineTuningConfig:
 
     model_config: FineTuningModelConfig
     data_config: FineTuningDataConfig
-    lora_config: LoraConfig
+    lora_config: FineTuningLoraConfig
     sftt_config: FineTuningSFTTConfig
 
     # not used, just relying on Trainer defaults
