@@ -85,7 +85,7 @@ class FineTuningConfig:
     lora_config: FineTuningLoraConfig
     sftt_config: FineTuningSFTTConfig
 
-    # not used, just relying on Trainer defaults
+    # not used
     # dataset_text_field="text"
     # max_seq_length=fmt_opts['max_tokens'] # only used if packing=True I think
     # packing=False

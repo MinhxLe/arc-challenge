@@ -7,7 +7,7 @@ from arc.training import (
 )
 
 config = FineTuningConfig(
-    name="arcitects",
+    name="architects",
     model_config=FineTuningModelConfig(
         model="nvidia/Mistral-NeMo-Minitron-8B-Base",
         model_dtype=None,
