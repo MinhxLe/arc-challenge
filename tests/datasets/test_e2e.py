@@ -12,7 +12,7 @@ def test_load_all_datasets():
     print(Datasets.arc_public_train.get_dataset().shape)
     print(Datasets.arc_public_test.get_dataset().shape)
     print(Datasets.concept_arc.get_dataset().shape)
-    print(Datasets.arc_heavy.get_dataset().shape)
+    print(Datasets.create_arc_heavy().get_dataset().shape)
 
 
 def test_sample():
