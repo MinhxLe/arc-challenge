@@ -1,11 +1,12 @@
 from dataclasses import dataclass
-import functools
 import torch
 import typing as ta
 from datasets import Dataset, load_dataset
 
 from tokenizers import Tokenizer
 from transformers import DataCollatorForLanguageModeling
+from arc import settings
+from datetime import datetime
 
 
 from arc.architects import (
@@ -112,9 +113,9 @@ class FineTuningConfig:
             self.sftt_config.random_state or self.lora_config.random_state
         )
 
-    @functools.cached_property
+    @property
     def output_dir(self) -> str:
-        return f"tmp/runs/{self.name}"
+        return f"{(settings.TEMP_ROOT_DIR)}/runs/{self.name}/{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
 
 ##### architects config
