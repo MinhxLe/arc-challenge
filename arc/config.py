@@ -2,7 +2,17 @@ from dataclasses import dataclass
 import functools
 import torch
 import typing as ta
-from datasets import Dataset
+from datasets import Dataset, load_dataset
+
+from tokenizers import Tokenizer
+from transformers import DataCollatorForLanguageModeling
+
+
+from arc.architects import (
+    fmt_opts,
+    keep_single_char_tokens,
+    InputMaskingDataCollator,
+)
 
 
 @dataclass
@@ -52,7 +62,9 @@ class FineTuningLoraConfig:
 class FineTuningSFTTConfig:
     random_state: int | None
     dataset_text_field: str = "text"
-    data_collator_constructor: ta.Optional[ta.Callable] = None
+    data_collator_constructor: ta.Optional[
+        ta.Callable[[Tokenizer], DataCollatorForLanguageModeling]
+    ] = None
     max_seq_length: int = 2048
     per_device_train_batch_size: int = 8
     gradient_accumulation_steps: int = 1
@@ -88,8 +100,6 @@ class FineTuningConfig:
     sftt_config: FineTuningSFTTConfig
 
     # not used
-    # dataset_text_field="text"
-    # max_seq_length=fmt_opts['max_tokens'] # only used if packing=True I think
     # packing=False
 
     def __post_init__(self):
@@ -105,3 +115,86 @@ class FineTuningConfig:
     @functools.cached_property
     def output_dir(self) -> str:
         return f"tmp/runs/{self.name}"
+
+
+##### architects config
+
+
+def architects_data_loader() -> Dataset:
+    return (
+        load_dataset(
+            "barc0/induction_100k_gpt4o-mini_generated_problems_seed100.jsonl_messages_format_0.3",
+            split="train_sft",
+        ),
+    )
+
+
+def architects_data_collator_constructor(tokenizer) -> InputMaskingDataCollator:
+    return InputMaskingDataCollator(
+        instruction_template=fmt_opts["query_beg"],
+        response_template=fmt_opts["reply_beg"],
+        mlm=False,
+        tokenizer=tokenizer,
+        mask_first_n_examples=1,
+    )
+
+
+def architects_model_and_tokenizer_preprocessor(model, tokenizer):
+    keep_tok = list(
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?.:,;*+/-="
+    ) + tokenizer.tokenize("\n")
+
+    keep_single_char_tokens(model, tokenizer, keep=keep_tok, remove_unk=True)
+    tokenizer.padding = "right"
+
+    return model, tokenizer
+
+
+architects_config = FineTuningConfig(
+    name="architects",
+    model_config=FineTuningModelConfig(
+        model="nvidia/Mistral-NeMo-Minitron-8B-Base",
+        model_dtype=None,
+        load_in_4bit=True,
+    ),
+    model_and_tokenizer_preprocessor=architects_model_and_tokenizer_preprocessor,
+    data_loader=architects_data_loader,
+    lora_config=FineTuningLoraConfig(
+        lora_rank=256,
+        lora_alpha=24,
+        lora_dropout=0,
+        use_rslora=True,
+        target_modules=[
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "o_proj",
+            "gate_proj",
+            "up_proj",
+            "down_proj",
+            "embed_tokens",
+            "lm_head",
+        ],
+        random_state=42,
+    ),
+    sftt_config=FineTuningSFTTConfig(
+        random_state=42,
+        max_seq_length=fmt_opts["max_tokens"],
+        data_collator_constructor=architects_data_collator_constructor,
+        per_device_train_batch_size=4,
+        gradient_accumulation_steps=2,
+        warmup_ratio=0.25,
+        warmup_steps=0,
+        num_train_epochs=1,
+        learning_rate=1e-4,
+        embedding_learning_rate=1e-5,
+        weight_decay=0,
+        lr_scheduler_type="cosine",
+        logging_steps=10,
+        optimizer="adamw_8bit",
+    ),
+)
+
+#####
+
+all_configs = [architects_config]
