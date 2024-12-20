@@ -52,7 +52,7 @@ class FineTuningLoraConfig:
 class FineTuningSFTTConfig:
     random_state: int | None
     dataset_text_field: str = "text"
-    data_collator: ta.Optional[ta.Callable] = None
+    data_collator_constructor: ta.Optional[ta.Callable] = None
     max_seq_length: int = 2048
     per_device_train_batch_size: int = 8
     gradient_accumulation_steps: int = 1
@@ -82,6 +82,8 @@ class FineTuningConfig:
     data_loader: ta.Callable[[], Dataset]
 
     model_config: FineTuningModelConfig
+    model_and_tokenizer_preprocessor: ta.Callable
+
     lora_config: FineTuningLoraConfig
     sftt_config: FineTuningSFTTConfig
 
