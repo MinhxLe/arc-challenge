@@ -79,7 +79,7 @@ class FineTuningSFTTConfig:
 class FineTuningConfig:
     name: str
 
-    data: Dataset
+    data_loader: ta.Callable[[], Dataset]
 
     model_config: FineTuningModelConfig
     lora_config: FineTuningLoraConfig
