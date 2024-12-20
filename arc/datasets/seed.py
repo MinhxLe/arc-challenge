@@ -4,26 +4,28 @@ refers to all seed datasets
 
 import abc
 from dataclasses import dataclass
+import functools
+import random
 from typing import ClassVar, Literal
 import arckit
-from datasets import Dataset, load_dataset
+from datasets import Dataset, load_dataset, load_from_disk
 import numpy as np
 import os
 from arc import settings
 from arc.external import github
+from arc.datasets import transform
 from loguru import logger
-import glob
-import zipfile
-import multiprocessing
 
-TMP_DATA_DIR = os.path.join(settings.TEMP_ROOT_DIR, "data")
-_NEONEYE_REPO_NAME = "neoneye/arc-dataset-collection"
-_NEONEYE_DATA_DIR = os.path.join(TMP_DATA_DIR, "neoneye_arc_dataset_collection")
+DATA_DIR = os.path.join(settings.TEMP_ROOT_DIR, "data")
+GENERATED_DATA_DIR = os.path.join(DATA_DIR, "generated")
 
 
 class DatasetHandler(abc.ABC):
-    @abc.abstractmethod
     def get_dataset(self) -> Dataset:
+        return self._create_dataset()
+
+    @abc.abstractmethod
+    def _create_dataset(self) -> Dataset:
         """
         returns a dataset of the format
         {
@@ -63,14 +65,14 @@ class ArckitHandler(DatasetHandler):
             test=[dict(input=np.array(i), output=np.array(o)) for i, o in task.test],
         )
 
-    def get_dataset(self) -> Dataset:
+    def _create_dataset(self) -> Dataset:
         arckit_dataset = self._get_arckit_dataset(self.split, self.version)
         return Dataset.from_list([self._format_task(t) for t in arckit_dataset])
 
 
 class ConceptARCHandler(DatasetHandler):
     _REPO_NAME: ClassVar[str] = "victorvikram/ConceptARC"
-    _TMP_DIR: ClassVar[str] = os.path.join(TMP_DATA_DIR, "concept_arc")
+    _TMP_DIR: ClassVar[str] = os.path.join(DATA_DIR, "concept_arc")
 
     def __post_init__(self) -> None:
         if not os.path.exists(self._TMP_DIR):
@@ -79,45 +81,72 @@ class ConceptARCHandler(DatasetHandler):
 
         self.tasks = tasks
 
-    def get_dataset(self) -> Dataset:
+    def _create_dataset(self) -> Dataset:
         return load_dataset(
             "json", data_files=f"{self._TMP_DIR}/corpus/*/*.json", split="train"
         )
 
 
-class ARCHeavyHandler(DatasetHandler):
-    _TMP_DIR = os.path.join(TMP_DATA_DIR, "arc_heavy")
+@dataclass
+class GeneratedDatasetHandler(DatasetHandler):
+    seed: int = 42
 
-    def __init__(self) -> None:
-        if not os.path.exists(_NEONEYE_DATA_DIR):
-            github.clone_repo(_NEONEYE_REPO_NAME, _NEONEYE_DATA_DIR)
+    @property
+    @abc.abstractmethod
+    def name(self) -> str:
+        pass
 
-        if not os.path.exists(self._TMP_DIR):
-            logger.debug(f"creating {self._TMP_DIR}")
-            os.makedirs(self._TMP_DIR)
-            heavy_data_dir = os.path.join(
-                _NEONEYE_DATA_DIR, "dataset", "ARC-Heavy", "data_100k"
-            )
-            zip_files = glob.glob(os.path.join(heavy_data_dir, "*.zip"))
-
-            for zip_path in zip_files:
-                try:
-                    with zipfile.ZipFile(zip_path, "r") as zip_ref:
-                        # Extract to a subdirectory named after the zip file (without .zip extension)
-                        zip_ref.extractall(self._TMP_DIR)
-                        logger.debug(f"Extracted {zip_path}")
-                except Exception as e:
-                    logger.exception(f"Failed to extract {zip_path}: {str(e)}")
-                    continue
-        # TODO it's worth optimizing merging in the datasets into a single file
+    @property
+    def cache_dir(self) -> str:
+        return os.path.join(GENERATED_DATA_DIR, self.name)
 
     def get_dataset(self) -> Dataset:
-        # self.tasks = _get_tasks_from_json_dir(self._TMP_DIR, fname_to_id)
-        return load_dataset(
-            "json",
-            data_files=f"{self._TMP_DIR}/*.json",
-            num_proc=multiprocessing.cpu_count(),
-            split="train",
+        if os.path.exists(self.cache_dir):
+            logger.info(f"found previously generated dataset at {self.cache_dir}")
+            dataset = load_from_disk(self.cache_dir)
+        else:
+            logger.info(f"creating dataset, saving to {self.cache_dir}")
+            dataset = super().get_dataset()
+            dataset.save_to_disk(self.cache_dir)
+        return dataset
+
+
+@dataclass
+class ARCHeavyHandler(GeneratedDatasetHandler):
+    _HF_NAME = "barc0/200k_HEAVY_gpt4o-description-gpt4omini-code_generated_problems"
+    train_set_size: int = 3
+    test_set_size: int = 1
+    seed: int = 42
+
+    @property
+    def name(self) -> str:
+        return f"arc_heavy_seed-{self.seed}-train_set_size-{self.train_set_size}_test_set_size-{self.test_set_size}"
+
+    @classmethod
+    def _transform_row(cls, row, train_set_size: int, test_set_size: int) -> dict:
+        examples = row.pop("examples")
+        row.pop("seeds")
+        row.pop("source")
+        assert len(examples) >= train_set_size + test_set_size
+        sampled_examples = random.sample(examples, train_set_size + test_set_size)
+        row["train"] = [
+            dict(input=i, output=o) for i, o in sampled_examples[:train_set_size]
+        ]
+        row["test"] = [
+            dict(input=i, output=o) for i, o in sampled_examples[train_set_size:]
+        ]
+        return row
+
+    def _create_dataset(self) -> Dataset:
+        random.seed(self.seed)
+        raw_dataset = load_dataset(self._HF_NAME, split="train")
+        return transform.map_dataset(
+            raw_dataset,
+            functools.partial(
+                self._transform_row,
+                train_set_size=self.train_set_size,
+                test_set_size=self.test_set_size,
+            ),
         )
 
 
@@ -125,4 +154,5 @@ class Datasets:
     arc_public_train = ArckitHandler("train")
     arc_public_test = ArckitHandler("test")
     concept_arc = ConceptARCHandler()
-    arc_heavy = ARCHeavyHandler()  # [TODO][P0] I think this is not correct
+
+    create_arc_heavy = ARCHeavyHandler
