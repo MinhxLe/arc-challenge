@@ -12,7 +12,7 @@ from datasets import Dataset, load_dataset, load_from_disk
 import numpy as np
 import os
 from arc import settings
-from arc.external import github
+from arc.external import github, re_arc
 from arc.datasets import transform
 from loguru import logger
 
@@ -74,8 +74,9 @@ class ConceptARCHandler(DatasetHandler):
     _REPO_NAME: ClassVar[str] = "victorvikram/ConceptARC"
     _TMP_DIR: ClassVar[str] = os.path.join(DATA_DIR, "concept_arc")
 
-    def __post_init__(self) -> None:
+    def __init__(self) -> None:
         if not os.path.exists(self._TMP_DIR):
+            os.makedirs(self._TMP_DIR)
             github.clone_repo(self._REPO_NAME, self._TMP_DIR)
         tasks = []
 
@@ -89,7 +90,7 @@ class ConceptARCHandler(DatasetHandler):
 
 @dataclass
 class GeneratedDatasetHandler(DatasetHandler):
-    seed: int = 42
+    seed: int
 
     @property
     @abc.abstractmethod
@@ -112,11 +113,54 @@ class GeneratedDatasetHandler(DatasetHandler):
 
 
 @dataclass
+class ReArcHandler(GeneratedDatasetHandler):
+    n_tasks: int  # number of tasks to generate per 400
+    test_set_size: int = 1
+    train_set_size: int = 3
+
+    @property
+    def name(self) -> str:
+        return f"re_arc_heavy_seed-{self.seed}-train_set_size-{self.train_set_size}_test_set_size-{self.test_set_size}"
+
+    @classmethod
+    def _transform_row(cls, row, train_set_size: int, test_set_size: int) -> dict:
+        row.pop("task_id")
+        examples = row.pop("examples")
+        assert len(examples) >= train_set_size + test_set_size
+        sampled_examples = random.sample(examples, train_set_size + test_set_size)
+        row["train"] = [
+            dict(input=i, output=o) for i, o in sampled_examples[:train_set_size]
+        ]
+        row["test"] = [
+            dict(input=i, output=o) for i, o in sampled_examples[train_set_size:]
+        ]
+        return row
+
+    def _create_dataset(self) -> Dataset:
+        random.seed(self.seed)
+        # [TODO] we might want to enable
+        raw_dataset = re_arc.generate_dataset(
+            seed=self.seed,
+            n_examples=1000,
+            diff_lb=0,
+            diff_ub=1,
+        )
+        repeated_dataset = transform.concat(*[raw_dataset for _ in range(self.n_tasks)])
+        return transform.map_dataset(
+            repeated_dataset,
+            functools.partial(
+                self._transform_row,
+                train_set_size=self.train_set_size,
+                test_set_size=self.test_set_size,
+            ),
+        )
+
+
+@dataclass
 class ARCHeavyHandler(GeneratedDatasetHandler):
     _HF_NAME = "barc0/200k_HEAVY_gpt4o-description-gpt4omini-code_generated_problems"
     train_set_size: int = 3
     test_set_size: int = 1
-    seed: int = 42
 
     @property
     def name(self) -> str:
@@ -156,3 +200,4 @@ class Datasets:
     concept_arc = ConceptARCHandler()
 
     create_arc_heavy = ARCHeavyHandler
+    create_re_arc = ReArcHandler
