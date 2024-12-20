@@ -42,17 +42,6 @@ class FineTuningLoraConfig:
     # use_gradient_checkpointing=True, setting to True in outer
 
     def __post_init__(self):
-        if self.use_rslora:
-            if self.lora_alpha > (self.lora_rank) ** (1 / 2):
-                raise ValueError(
-                    f"lora_alpha ({self.lora_alpha}) must be <= sqrt(lora_rank) ({(self.lora_rank)**(1/2)})"
-                )
-        else:
-            if self.lora_alpha > self.lora_rank:
-                raise ValueError(
-                    f"lora_alpha ({self.lora_alpha}) must be <= lora_rank ({self.lora_rank})"
-                )
-
         if not 0.0 <= self.lora_dropout <= 1.0:
             raise ValueError(
                 f"lora_dropout must be between 0.0 and 1.0, got {self.lora_dropout}"
