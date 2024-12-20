@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 import functools
 import torch
+import typing as ta
+from datasets import Dataset
 
 
 @dataclass
@@ -12,12 +14,6 @@ class FineTuningModelConfig:
     def __post_init__(self):
         if self.model_dtype and self.load_in_4bit:
             raise ValueError("expected model_dtype to be None if load_in_4bit")
-
-
-@dataclass
-class FineTuningDataConfig:
-    dataset_name: str
-    dataset_split: str
 
 
 @dataclass
@@ -55,6 +51,9 @@ class FineTuningLoraConfig:
 @dataclass
 class FineTuningSFTTConfig:
     random_state: int | None
+    dataset_text_field: str = "text"
+    data_collator: ta.Optional[ta.Callable] = None
+    max_seq_length: int = 2048
     per_device_train_batch_size: int = 8
     gradient_accumulation_steps: int = 1
     warmup_ratio: float = 0.0
@@ -80,8 +79,9 @@ class FineTuningSFTTConfig:
 class FineTuningConfig:
     name: str
 
+    data: Dataset
+
     model_config: FineTuningModelConfig
-    data_config: FineTuningDataConfig
     lora_config: FineTuningLoraConfig
     sftt_config: FineTuningSFTTConfig
 
