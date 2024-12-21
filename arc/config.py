@@ -112,7 +112,9 @@ class FineTuningConfig:
 
 
 def architects_data_loader() -> Dataset:
-    return Datasets.create_re_arc(seed=42, n_tasks=3).get_dataset()
+    # the desired dataset isn't working yet
+    # return Datasets.create_re_arc(seed=42, n_tasks=3).get_dataset()
+    return Datasets.arc_public_train.get_dataset()
 
 
 def architects_data_collator_constructor(tokenizer) -> InputMaskingDataCollator:
