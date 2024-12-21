@@ -25,7 +25,7 @@ class Formatter:
     def format_grid(self, grid: Grid) -> str:
         min_color, max_color = min(Color).value, max(Color).value
         assert (grid >= min_color).all()
-        assert (grid < max_color).all()
+        assert (grid <= max_color).all()
 
         char_grid = np.char.mod("%d", grid).tolist()
         return Token.NEW_LINE.join(["".join(row) for row in char_grid]) + Token.NEW_LINE
@@ -40,8 +40,9 @@ class Formatter:
         train_text = "".join(
             [self._format_input_output(x.input_, x.output) for x in task.train_set]
         )
+        test_example = task.test_set[0]
         test_text = self._format_input_output(
-            task.test.input_, task.test.output if include_test_output else None
+            test_example.input_, test_example.output if include_test_output else None
         )
 
         return f"{self.preprompt}{train_text}{test_text}"
