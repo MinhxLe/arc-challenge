@@ -141,7 +141,7 @@ class ReArcHandler(GeneratedDatasetHandler):
         # [TODO] we might want to enable
         raw_dataset = re_arc.generate_dataset(
             seed=self.seed,
-            n_examples=1000,
+            n_examples=100,
             diff_lb=0,
             diff_ub=1,
         )
