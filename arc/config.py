@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 import torch
 import typing as ta
-from datasets import Dataset, load_dataset
+from datasets import Dataset
+from arc.datasets.seed import Datasets
 
 from tokenizers import Tokenizer
 from transformers import DataCollatorForLanguageModeling
@@ -111,12 +112,7 @@ class FineTuningConfig:
 
 
 def architects_data_loader() -> Dataset:
-    return (
-        load_dataset(
-            "barc0/induction_100k_gpt4o-mini_generated_problems_seed100.jsonl_messages_format_0.3",
-            split="train_sft",
-        ),
-    )
+    return Datasets.create_re_arc(seed=42, n_tasks=3).get_dataset()
 
 
 def architects_data_collator_constructor(tokenizer) -> InputMaskingDataCollator:
