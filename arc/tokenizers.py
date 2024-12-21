@@ -46,3 +46,11 @@ class Formatter:
         )
 
         return f"{self.preprompt}{train_text}{test_text}"
+
+    # TODO: type the row and return more tightly
+    def transform_train_test_to_text_schema(self, row: dict) -> dict:
+        task = Task.from_dict(row)
+        row.pop("train")
+        row.pop("test")
+        row["text"] = self.format_task(task, include_test_output=True)
+        return row
