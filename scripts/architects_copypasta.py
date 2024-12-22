@@ -3,9 +3,9 @@ from unsloth import FastLanguageModel
 from unsloth import UnslothTrainer as Trainer, unsloth_train, is_bfloat16_supported
 from unsloth import UnslothTrainingArguments as TrainingArguments
 
-# from datasets import Dataset
-# from arc.datasets.seed import Datasets
-# from arc.tokenizers import Formatter
+from arc.core import Task
+from arc.datasets.seed import Datasets
+from arc.tokenizers import Formatter
 
 import json
 import torch
@@ -505,6 +505,7 @@ class InputMaskingDataCollator(DataCollatorForCompletionOnlyLM):
         self.mask_first_n_examples = mask_first_n_examples
 
     def torch_call(self, examples):
+        # [TODO] fix implementation ignoring mask for inputs
         batch = super().torch_call(examples)  # call super, masking all inputs
         for i in range(len(batch["labels"])):
             for _ in range(self.mask_first_n_examples):
@@ -660,6 +661,7 @@ keep_tok = list(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?.:,;*+/-="
 ) + tokenizer.tokenize("\n")
 keep_single_char_tokens(model, tokenizer, keep=keep_tok, remove_unk=True)
+# [TODO] explicitly create a pad token
 
 # set formatting options
 fmt_opts = dict(
@@ -686,7 +688,7 @@ lora_layers = [
 model = FastLanguageModel.get_peft_model(
     model=model,
     target_modules=lora_layers,
-    r=256,
+    r=64,  # [TODO] change back to 256
     lora_alpha=24,
     lora_dropout=0,
     bias="none",
@@ -696,22 +698,27 @@ model = FastLanguageModel.get_peft_model(
     loftq_config=None,
 )
 
+formatter = Formatter(output_tail_token=tokenizer.eos_token)
+
+
+def format_row(row):
+    task = Task.from_dict(row)
+    row.pop("train")
+    row.pop("test")
+    return formatter.format_task_for_sft(task)
+
+
 # This isn't working yet.
-# train_dataset = Datasets.arc_public_train.get_dataset().map(
-#     Formatter(output_tail_token=tokenizer.eos_token).transform_train_test_to_text_schema
-# )
+train_dataset = Datasets.arc_public_train.get_dataset().map(format_row)
+data_collator = InputMaskingDataCollator(
+    instruction_template=formatter.input_head_token,
+    response_template=formatter.output_head_token,
+    mlm=False,
+    tokenizer=tokenizer,
+    mask_first_n_examples=1,
+)
 
-# Haven't tried this yet:
-# train_dataset = ArcDataset.load_from_rearc(
-#     re_arc_path, n=644, sizes=[6], seed=42, mix_datasets=mix_datasets
-# )
-
-# Try a dummy to reproduce architects' data
-train_dataset = ArcDataset.load_from_json("sids_json_list.json")
-
-train_dataset_as_list = train_dataset.as_list(len_name="text", **fmt_opts) * 100
-
-FastLanguageModel.for_training(model)
+model = FastLanguageModel.for_training(model)
 tokenizer.padding_side = "right"
 
 trainer = Trainer(
@@ -721,15 +728,9 @@ trainer = Trainer(
     dataset_text_field="text",
     max_seq_length=fmt_opts["max_tokens"],
     packing=False,
-    data_collator=InputMaskingDataCollator(
-        instruction_template=fmt_opts["query_beg"],
-        response_template=fmt_opts["reply_beg"],
-        mlm=False,
-        tokenizer=tokenizer,
-        mask_first_n_examples=1,
-    ),
+    data_collator=data_collator,
     args=TrainingArguments(
-        per_device_train_batch_size=4,
+        per_device_train_batch_size=2,
         gradient_accumulation_steps=2,
         warmup_ratio=0.25,
         num_train_epochs=1,
@@ -738,7 +739,7 @@ trainer = Trainer(
         fp16=not is_bfloat16_supported(),
         bf16=is_bfloat16_supported(),
         logging_steps=10,
-        optim="adamw_8bit",
+        optim="adamw_torch_fused",  # [TODO] change back to optim="adamw_8bit",
         weight_decay=0.00,
         lr_scheduler_type="cosine",
         seed=42,
