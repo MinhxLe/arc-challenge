@@ -57,7 +57,6 @@ class Formatter:
         )
         return f"{self.preprompt}{train_text}{test_text}"
 
-    # TODO: type the row and return more tightly
     def format_task_for_sft(self, task: Task) -> SFTRow:
         train_text = "".join(
             [self._format_input_output(x.input_, x.output) for x in task.train_set]
@@ -72,10 +71,3 @@ class Formatter:
             reply=reply_text,
             text=f"{train_text}{query_text}{reply_text}",
         )
-
-    def transform_train_test_to_text_schema(self, row: dict) -> dict:
-        task = Task.from_dict(row)
-        row.pop("train")
-        row.pop("test")
-        row["text"] = self.format_task(task, include_test_output=True)
-        return row
