@@ -21,7 +21,7 @@ def concat(*datasets: Dataset) -> Dataset:
 
 
 def map_dataset(dataset: Dataset, fn: Callable) -> Dataset:
-    return dataset.map(fn, num_proc=multiprocessing.cpu_count() // 2)
+    return dataset.map(fn, num_proc=multiprocessing.cpu_count())
 
 
 def shuffle_train_order(dataset: Dataset, seed: int = 42) -> Dataset:
