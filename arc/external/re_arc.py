@@ -2,6 +2,7 @@
 wrapper around re-arc. the implementation of this is really jank.
 """
 
+from datasets.load import load_from_disk
 from arc.external import github
 from arc import settings
 import os
@@ -64,7 +65,9 @@ def generate_dataset(
     force_recreate: bool = False,
 ):
     raw_data_dir = _raw_data_dir(seed, n_examples, diff_lb, diff_ub)
-    if not os.path.exists(raw_data_dir) or force_recreate:
+    processed_data_dir = f"{raw_data_dir}_processed"
+
+    if not os.path.exists(processed_data_dir) or force_recreate:
         with working_dir(_TMP_REPO_DIR):
             import main
 
@@ -77,4 +80,8 @@ def generate_dataset(
                 diff_ub=diff_ub,
                 diff_lb=diff_lb,
             )
-    return _load_dataset(os.path.join(raw_data_dir, "tasks"))
+        dataset = _load_dataset(os.path.join(raw_data_dir, "tasks"))
+        dataset.save_to_disk(processed_data_dir)
+    else:
+        dataset = load_from_disk(processed_data_dir)
+    return dataset

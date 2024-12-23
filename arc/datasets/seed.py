@@ -9,12 +9,14 @@ import random
 from typing import ClassVar, Literal
 import arckit
 from datasets import Dataset, load_dataset, load_from_disk
+from datasets.iterable_dataset import ExamplesIterable
 import numpy as np
 import os
 from arc import settings
 from arc.external import github, re_arc
 from arc.datasets import transform
 from loguru import logger
+from arc.utils import os_utils
 
 DATA_DIR = os.path.join(settings.TEMP_ROOT_DIR, "data")
 GENERATED_DATA_DIR = os.path.join(DATA_DIR, "generated")
@@ -101,7 +103,10 @@ class GeneratedDatasetHandler(DatasetHandler):
     def cache_dir(self) -> str:
         return os.path.join(GENERATED_DATA_DIR, self.name)
 
-    def get_dataset(self) -> Dataset:
+    def get_dataset(self, recreate: bool = False) -> Dataset:
+        if recreate and os.path.exists(self.cache_dir):
+            logger.info("deleting cache since recreate is true")
+            os_utils.rm_all(self.cache_dir)
         if os.path.exists(self.cache_dir):
             logger.info(f"found previously generated dataset at {self.cache_dir}")
             dataset = load_from_disk(self.cache_dir)
@@ -120,19 +125,18 @@ class ReArcHandler(GeneratedDatasetHandler):
 
     @property
     def name(self) -> str:
-        return f"re_arc_heavy_seed-{self.seed}-train_set_size-{self.train_set_size}_test_set_size-{self.test_set_size}"
+        return f"re_arc_seed-{self.seed}-train_set_size-{self.train_set_size}_test_set_size-{self.test_set_size}"
 
     @classmethod
     def _transform_row(cls, row, train_set_size: int, test_set_size: int) -> dict:
         row.pop("task_id")
         examples = row.pop("examples")
         assert len(examples) >= train_set_size + test_set_size
-        sampled_examples = random.sample(examples, train_set_size + test_set_size)
-        row["train"] = [
-            dict(input=i, output=o) for i, o in sampled_examples[:train_set_size]
-        ]
+        random.shuffle(examples)
+        row["train"] = [dict(input=i, output=o) for i, o in examples[:train_set_size]]
         row["test"] = [
-            dict(input=i, output=o) for i, o in sampled_examples[train_set_size:]
+            dict(input=i, output=o)
+            for i, o in examples[train_set_size : train_set_size + test_set_size]
         ]
         return row
 
@@ -141,7 +145,7 @@ class ReArcHandler(GeneratedDatasetHandler):
         # [TODO] we might want to enable
         raw_dataset = re_arc.generate_dataset(
             seed=self.seed,
-            n_examples=100,
+            n_examples=1000,
             diff_lb=0,
             diff_ub=1,
         )
