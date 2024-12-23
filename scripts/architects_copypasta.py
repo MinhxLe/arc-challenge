@@ -1,6 +1,7 @@
 from unsloth import FastLanguageModel
 from unsloth import UnslothTrainer as Trainer, unsloth_train, is_bfloat16_supported
 from unsloth import UnslothTrainingArguments as TrainingArguments
+import multiprocessing
 
 from arc.core import Task
 from arc.datasets.seed import Datasets
@@ -215,7 +216,6 @@ def format_row(row):
 
 
 base_train_dataset = dst.concat(
-    # [TODO] repeat 128
     dst.repeat(Datasets.concept_arc.get_dataset(), n=128),
     dst.repeat(Datasets.arc_public_train.get_dataset(), n=128),
     # [TODO] change to n_tasks=644
@@ -230,13 +230,19 @@ transformed_train_dataset = dst.concat(
     *[dst.apply_transform(base_train_dataset, t.Rotate(i)) for i in range(4)],
     dst.apply_transform(base_train_dataset, t.PermuteColor(seed=42)),
 )
-
 train_dataset = dst.concat(
     transformed_train_dataset,
     dst.shuffle_train_order(transformed_train_dataset, seed=42),
 )
+train_dataset = train_dataset.map(format_row, num_proc=24).filter(
+    lambda r: len(r["text"]) <= 8192
+)
 
-train_dataset = train_dataset.map(format_row, num_proc=24)
+# [TODO] it will be faster for us to build the dataset formatting ourselves
+# this is saved from cache
+train_dataset = load_from_disk(
+    "/shared/research/arc_challenge/data/train/2024_12_22_train/"
+)
 
 
 data_collator = InputMaskingDataCollator(
@@ -249,13 +255,6 @@ data_collator = InputMaskingDataCollator(
 
 model = FastLanguageModel.for_training(model)
 tokenizer.padding_side = "right"
-
-
-# [TODO] it will be faster for us to build the dataset formatting ourselves
-# this is saved from cache
-train_dataset = load_from_disk(
-    "/shared/research/arc_challenge/data/train/2024_12_22_train/"
-)
 
 
 trainer = Trainer(
@@ -282,8 +281,10 @@ trainer = Trainer(
         lr_scheduler_type="cosine",
         seed=42,
         output_dir="tmp_output",
-        save_strategy="no",
+        save_strategy="steps",
+        save_steps=1_000,
         report_to="wandb",
     ),
+    dataset_num_proc=multiprocessing.cpu_count(),
 )
 trainer_stats = unsloth_train(trainer)
