@@ -1,7 +1,9 @@
 from unsloth import FastLanguageModel
+import os
 from unsloth import UnslothTrainer as Trainer, unsloth_train, is_bfloat16_supported
 from unsloth import UnslothTrainingArguments as TrainingArguments
 import multiprocessing
+from arc import settings
 
 from arc.core import Task
 from arc.datasets.seed import Datasets
@@ -168,7 +170,8 @@ def keep_single_char_tokens(
 
 
 base_model = (
-    "nvidia/Mistral-NeMo-Minitron-8B-Base"  # auto-downloaded from huggingface.co
+    "chuanli11/Llama-3.2-3B-Instruct-uncensored"
+    # "nvidia/Mistral-NeMo-Minitron-8B-Base"  # auto-downloaded from huggingface.co
 )
 
 
@@ -215,34 +218,33 @@ def format_row(row):
     return formatter.format_task_for_sft(task)
 
 
-base_train_dataset = dst.concat(
-    dst.repeat(Datasets.concept_arc.get_dataset(), n=128),
-    dst.repeat(Datasets.arc_public_train.get_dataset(), n=128),
-    # [TODO] change to n_tasks=644
-    Datasets.create_re_arc(
-        seed=42, n_tasks=100, test_set_size=1, train_set_size=5
-    ).get_dataset(),
-)
-
-transformed_train_dataset = dst.concat(
-    base_train_dataset,
-    dst.apply_transform(base_train_dataset, t.Reflect(t.Reflect.Type.DIAGONAL)),
-    *[dst.apply_transform(base_train_dataset, t.Rotate(i)) for i in range(4)],
-    dst.apply_transform(base_train_dataset, t.PermuteColor(seed=42)),
-)
-train_dataset = dst.concat(
-    transformed_train_dataset,
-    dst.shuffle_train_order(transformed_train_dataset, seed=42),
-)
-train_dataset = train_dataset.map(format_row, num_proc=24).filter(
-    lambda r: len(r["text"]) <= 8192
-)
-
-# [TODO] it will be faster for us to build the dataset formatting ourselves
-# this is saved from cache
-train_dataset = load_from_disk(
-    "/shared/research/arc_challenge/data/train/2024_12_22_train/"
-)
+# [Note] this is saved from trainer.train_dataset below
+if os.path.exists("/shared/research/arc_challenge/data/train/2024_12_23_train/"):
+    train_dataset = load_from_disk(
+        "/shared/research/arc_challenge/data/train/2024_12_23_train/"
+    )
+else:
+    base_train_dataset = dst.concat(
+        dst.repeat(Datasets.concept_arc.get_dataset(), n=128),
+        dst.repeat(Datasets.arc_public_train.get_dataset(), n=128),
+        # [TODO] change to n_tasks=644
+        Datasets.create_re_arc(
+            seed=42, n_tasks=100, test_set_size=1, train_set_size=5
+        ).get_dataset(),
+    )
+    transformed_train_dataset = dst.concat(
+        base_train_dataset,
+        dst.apply_transform(base_train_dataset, t.Reflect(t.Reflect.Type.DIAGONAL)),
+        *[dst.apply_transform(base_train_dataset, t.Rotate(i)) for i in range(4)],
+        dst.apply_transform(base_train_dataset, t.PermuteColor(seed=42)),
+    )
+    train_dataset = dst.concat(
+        transformed_train_dataset,
+        dst.shuffle_train_order(transformed_train_dataset, seed=42),
+    )
+    train_dataset = train_dataset.map(format_row, num_proc=24).filter(
+        lambda r: len(r["text"]) <= 8192
+    )
 
 
 data_collator = InputMaskingDataCollator(
@@ -256,19 +258,18 @@ data_collator = InputMaskingDataCollator(
 model = FastLanguageModel.for_training(model)
 tokenizer.padding_side = "right"
 
-
 trainer = Trainer(
     model=model,
     tokenizer=tokenizer,
     train_dataset=train_dataset,
-    dataset_text_field="text",
+    # dataset_text_field="text",
     max_seq_length=8192,
     packing=False,
     data_collator=data_collator,
     args=TrainingArguments(
         # [TODO] This might affect normalization
-        per_device_train_batch_size=1,
-        gradient_accumulation_steps=8,
+        per_device_train_batch_size=4,
+        gradient_accumulation_steps=2,
         warmup_ratio=0.25,
         num_train_epochs=1,
         learning_rate=1e-4,
@@ -280,7 +281,7 @@ trainer = Trainer(
         weight_decay=0.00,
         lr_scheduler_type="cosine",
         seed=42,
-        output_dir="tmp_output",
+        output_dir=f"{settings.TEMP_ROOT_DIR}/runs/architects_copy_2024-12-23",
         save_strategy="steps",
         save_steps=1_000,
         report_to="wandb",
@@ -288,3 +289,9 @@ trainer = Trainer(
     dataset_num_proc=multiprocessing.cpu_count(),
 )
 trainer_stats = unsloth_train(trainer)
+
+# dataloader = trainer.get_train_dataloader()
+# _, batch = next(enumerate(dataloader))
+# FastLanguageModel.for_inference(model)
+# with torch.no_grad():
+#     model.generate(batch["input_ids"])
