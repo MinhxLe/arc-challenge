@@ -7,6 +7,7 @@ from arc.datasets.seed import Datasets
 from arc.tokenizers import Formatter
 from arc.datasets import transform as dst
 from arc import transform as t
+from datasets import load_from_disk
 
 import json
 import torch
@@ -248,6 +249,14 @@ data_collator = InputMaskingDataCollator(
 
 model = FastLanguageModel.for_training(model)
 tokenizer.padding_side = "right"
+
+
+# [TODO] it will be faster for us to build the dataset formatting ourselves
+# this is saved from cache
+train_dataset = load_from_disk(
+    "/shared/research/arc_challenge/data/train/2024_12_22_train/"
+)
+
 
 trainer = Trainer(
     model=model,
