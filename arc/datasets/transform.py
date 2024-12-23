@@ -20,11 +20,15 @@ def concat(*datasets: Dataset) -> Dataset:
     return concatenate_datasets(datasets)
 
 
+def repeat(dataset: Dataset, n: int) -> Dataset:
+    return concat(*[dataset for _ in range(n)])
+
+
 def map_dataset(dataset: Dataset, fn: Callable) -> Dataset:
     return dataset.map(fn, num_proc=multiprocessing.cpu_count())
 
 
-def shuffle_train_order(dataset: Dataset, seed: int = 42) -> Dataset:
+def shuffle_train_order(dataset: Dataset, seed: int) -> Dataset:
     random.seed(seed)
 
     def shuffle(row):

@@ -2,6 +2,7 @@ import abc
 from dataclasses import dataclass
 from enum import Enum, auto
 import numpy as np
+import random
 
 from arc.core import Color, Grid
 
@@ -41,6 +42,7 @@ class Reflect(Transform):
     class Type(Enum):
         VERTICAL = auto()
         HORIZONTAL = auto()
+        DIAGONAL = auto()
 
     type_: Type
 
@@ -50,21 +52,18 @@ class Reflect(Transform):
                 return np.flip(grid, 0)
             case self.Type.VERTICAL:
                 return np.flip(grid, 1)
+            case self.Type.DIAGONAL:
+                return np.swapaxes(grid, 0, 1)
 
     @property
     def inverse(self) -> "Reflect":
         return self
 
 
-@dataclass
 class MapColor(Transform):
-    mapping: dict[Color, Color]
-
-    def __post_init__(self):
-        # we don't want to allow mapping background
-        assert Color.BLACK not in self.mapping.keys()
-        assert Color.BLACK not in self.mapping.values()
-        assert len(self.mapping) == len(set(self.mapping.values()))
+    def __init__(self, mapping: dict[Color, Color]):
+        assert len(mapping) == len(set(mapping.values()))
+        self.mapping = mapping
 
     def apply(self, grid: Grid) -> Grid:
         return self._apply_mapping(grid, self.mapping)
@@ -76,6 +75,19 @@ class MapColor(Transform):
     @classmethod
     def _apply_mapping(cls, grid: Grid, mapping: dict[Color, Color]) -> Grid:
         return np.vectorize(lambda x: mapping.get(x, x))(grid)
+
+
+@dataclass
+class PermuteColor(MapColor):
+    def __init__(self, seed: int):
+        random.seed(seed)
+        self.seed = seed
+        shuffled_colors = [c for c in Color]
+        random.shuffle(shuffled_colors)
+        mapping = {
+            original: new for original, new in zip([c for c in Color], shuffled_colors)
+        }
+        super().__init__(mapping)
 
 
 @dataclass

@@ -9,7 +9,6 @@ import random
 from typing import ClassVar, Literal
 import arckit
 from datasets import Dataset, load_dataset, load_from_disk
-from datasets.iterable_dataset import ExamplesIterable
 import numpy as np
 import os
 from arc import settings
@@ -17,9 +16,49 @@ from arc.external import github, re_arc
 from arc.datasets import transform
 from loguru import logger
 from arc.utils import os_utils
+from datasets import Sequence, Value
 
 DATA_DIR = os.path.join(settings.TEMP_ROOT_DIR, "data")
 GENERATED_DATA_DIR = os.path.join(DATA_DIR, "generated")
+
+FEATURE_SCHEMA = {
+    "train": [
+        {
+            "input": Sequence(
+                feature=Sequence(
+                    feature=Value(dtype="int64", id=None), length=-1, id=None
+                ),
+                length=-1,
+                id=None,
+            ),
+            "output": Sequence(
+                feature=Sequence(
+                    feature=Value(dtype="int64", id=None), length=-1, id=None
+                ),
+                length=-1,
+                id=None,
+            ),
+        }
+    ],
+    "test": [
+        {
+            "input": Sequence(
+                feature=Sequence(
+                    feature=Value(dtype="int64", id=None), length=-1, id=None
+                ),
+                length=-1,
+                id=None,
+            ),
+            "output": Sequence(
+                feature=Sequence(
+                    feature=Value(dtype="int64", id=None), length=-1, id=None
+                ),
+                length=-1,
+                id=None,
+            ),
+        }
+    ],
+}
 
 
 class DatasetHandler(abc.ABC):
@@ -133,10 +172,14 @@ class ReArcHandler(GeneratedDatasetHandler):
         examples = row.pop("examples")
         assert len(examples) >= train_set_size + test_set_size
         random.shuffle(examples)
-        row["train"] = [dict(input=i, output=o) for i, o in examples[:train_set_size]]
+        examples = random.sample(examples, train_set_size + test_set_size)
+        row["train"] = [
+            dict(input=x["input"], output=x["output"])
+            for x in examples[:train_set_size]
+        ]
         row["test"] = [
-            dict(input=i, output=o)
-            for i, o in examples[train_set_size : train_set_size + test_set_size]
+            dict(input=x["input"], output=x["output"])
+            for x in examples[train_set_size : train_set_size + test_set_size]
         ]
         return row
 
