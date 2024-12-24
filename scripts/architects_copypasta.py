@@ -174,7 +174,7 @@ base_model = (
     # "nvidia/Mistral-NeMo-Minitron-8B-Base"  # auto-downloaded from huggingface.co
 )
 
-
+max_seq_length = 8192
 model = tokenizer = None  # free memory
 model, tokenizer = load_unsloth_4bit(base_model)
 keep_tok = list(
@@ -184,6 +184,7 @@ keep_single_char_tokens(model, tokenizer, keep=keep_tok, remove_unk=True)
 # [TODO] explicitly create a pad token
 
 # create lora model
+# only some of these apply to Llama, but no downside to including the NeMo extras here
 lora_layers = [
     "q_proj",
     "k_proj",
@@ -195,6 +196,7 @@ lora_layers = [
     "embed_tokens",
     "lm_head",
 ]
+
 model = FastLanguageModel.get_peft_model(
     model=model,
     target_modules=lora_layers,
@@ -219,7 +221,7 @@ def format_row(row):
 
 
 def not_too_long(row):
-    return len(tokenizer.tokenize(row["text"])) <= 8192
+    return len(tokenizer.tokenize(row["text"])) <= max_seq_length
 
 
 train_dataset_path = "/shared/research/arc_challenge/data/train/2024_12_23_train/"
@@ -260,8 +262,7 @@ else:
         # [TODO] probably don't need to filter eval set for length
         .filter(not_too_long, num_proc=24)
     )
-    # permissions not working yet
-    # eval_dataset.save_to_disk(eval_dataset_path)
+    eval_dataset.save_to_disk(eval_dataset_path)
 
 
 data_collator = InputMaskingDataCollator(
@@ -281,12 +282,13 @@ trainer = Trainer(
     train_dataset=train_dataset,
     eval_dataset=eval_dataset,
     dataset_text_field="text",
-    max_seq_length=8192,
+    max_seq_length=max_seq_length,
     packing=False,
     data_collator=data_collator,
     args=TrainingArguments(
         # [TODO] This might affect normalization
         per_device_train_batch_size=4,
+        per_device_eval_batch_size=4,
         gradient_accumulation_steps=2,
         warmup_ratio=0.25,
         num_train_epochs=1,
@@ -300,7 +302,7 @@ trainer = Trainer(
         weight_decay=0.00,
         lr_scheduler_type="cosine",
         seed=42,
-        output_dir=f"{settings.TEMP_ROOT_DIR}/runs/architects_copy_2024-12-23",
+        output_dir=f"{settings.TEMP_ROOT_DIR}/runs/architects_copy_2024-12-24",
         save_strategy="steps",
         save_steps=1_000,
         report_to="wandb",
