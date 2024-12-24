@@ -222,11 +222,11 @@ def not_too_long(row):
     return len(tokenizer.tokenize(row["text"])) <= 8192
 
 
-# [Note] this is saved from trainer.train_dataset below
-if os.path.exists("/shared/research/arc_challenge/data/train/2024_12_23_train/"):
-    train_dataset = load_from_disk(
-        "/shared/research/arc_challenge/data/train/2024_12_23_train/"
-    )
+train_dataset_path = "/shared/research/arc_challenge/data/train/2024_12_23_train/"
+eval_dataset_path = "/shared/research/arc_challenge/data/train/2024_12_23_eval/"
+
+if os.path.exists(train_dataset_path):
+    train_dataset = load_from_disk(train_dataset_path)
 else:
     base_train_dataset = dst.concat(
         dst.repeat(Datasets.concept_arc.get_dataset(), n=128),
@@ -249,11 +249,10 @@ else:
     train_dataset = train_dataset.map(format_row, num_proc=24).filter(
         not_too_long, num_proc=24
     )
+    train_dataset.save_to_disk(train_dataset_path)
 
-if os.path.exists("/shared/research/arc_challenge/data/train/2024_12_23_eval/"):
-    eval_dataset = load_from_disk(
-        "/shared/research/arc_challenge/data/train/2024_12_23_eval/"
-    )
+if os.path.exists(eval_dataset_path):
+    eval_dataset = load_from_disk(eval_dataset_path)
 else:
     eval_dataset = (
         Datasets.arc_public_test.get_dataset()
@@ -261,9 +260,8 @@ else:
         # [TODO] probably don't need to filter eval set for length
         .filter(not_too_long, num_proc=24)
     )
-    eval_dataset.save_to_disk(
-        "/shared/research/arc_challenge/data/train/2024_12_23_eval/"
-    )
+    # permissions not working yet
+    # eval_dataset.save_to_disk(eval_dataset_path)
 
 
 data_collator = InputMaskingDataCollator(
