@@ -218,6 +218,10 @@ def format_row(row):
     return formatter.format_task_for_sft(task)
 
 
+def not_too_long(row):
+    return len(tokenizer.tokenize(row["text"])) <= 8192
+
+
 # [Note] this is saved from trainer.train_dataset below
 if os.path.exists("/shared/research/arc_challenge/data/train/2024_12_23_train/"):
     train_dataset = load_from_disk(
@@ -243,7 +247,22 @@ else:
         dst.shuffle_train_order(transformed_train_dataset, seed=42),
     )
     train_dataset = train_dataset.map(format_row, num_proc=24).filter(
-        lambda r: len(r["text"]) <= 8192
+        not_too_long, num_proc=24
+    )
+
+if os.path.exists("/shared/research/arc_challenge/data/train/2024_12_23_eval/"):
+    eval_dataset = load_from_disk(
+        "/shared/research/arc_challenge/data/train/2024_12_23_eval/"
+    )
+else:
+    eval_dataset = (
+        Datasets.arc_public_test.get_dataset()
+        .map(format_row, num_proc=24)
+        # [TODO] probably don't need to filter eval set for length
+        .filter(not_too_long, num_proc=24)
+    )
+    eval_dataset.save_to_disk(
+        "/shared/research/arc_challenge/data/train/2024_12_23_eval/"
     )
 
 
@@ -262,6 +281,7 @@ trainer = Trainer(
     model=model,
     tokenizer=tokenizer,
     train_dataset=train_dataset,
+    eval_dataset=eval_dataset,
     # dataset_text_field="text",
     max_seq_length=8192,
     packing=False,
@@ -274,6 +294,7 @@ trainer = Trainer(
         num_train_epochs=1,
         learning_rate=1e-4,
         embedding_learning_rate=1e-5,
+        eval_strategy="steps",
         fp16=not is_bfloat16_supported(),
         bf16=is_bfloat16_supported(),
         logging_steps=10,
@@ -281,7 +302,7 @@ trainer = Trainer(
         weight_decay=0.00,
         lr_scheduler_type="cosine",
         seed=42,
-        output_dir=f"{settings.TEMP_ROOT_DIR}/runs/architects_copy_2024-12-23",
+        output_dir=f"{settings.TEMP_ROOT_DIR}/runs/architects_copy_2024-12-24",
         save_strategy="steps",
         save_steps=1_000,
         report_to="wandb",
