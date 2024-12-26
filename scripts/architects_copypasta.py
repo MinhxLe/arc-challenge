@@ -224,8 +224,8 @@ def not_too_long(row):
     return len(tokenizer.tokenize(row["text"])) <= max_seq_length
 
 
-train_dataset_path = "/shared/research/arc_challenge/data/train/2024_12_23_train/"
-eval_dataset_path = "/shared/research/arc_challenge/data/train/2024_12_23_eval/"
+train_dataset_path = "/shared/research/arc_challenge/data/train/2024_12_26_train/"
+eval_dataset_path = "/shared/research/arc_challenge/data/train/2024_12_26_eval/"
 
 if os.path.exists(train_dataset_path):
     train_dataset = load_from_disk(train_dataset_path)
@@ -302,7 +302,7 @@ trainer = Trainer(
         weight_decay=0.00,
         lr_scheduler_type="cosine",
         seed=42,
-        output_dir=f"{settings.TEMP_ROOT_DIR}/runs/architects_copy_2024-12-24",
+        output_dir=f"{settings.TEMP_ROOT_DIR}/runs/architects_copy_2024-12-26",
         resume_from_checkpoint=True,
         save_strategy="steps",
         save_steps=1_000,
