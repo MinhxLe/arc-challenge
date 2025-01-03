@@ -142,6 +142,7 @@ class InputMaskingDataCollator(DataCollatorForCompletionOnlyLM):
         self.mask_first_n_examples = mask_first_n_examples
 
     def torch_call(self, examples):
+        # [TODO] confirm understanding that this is working.
         batch = super().torch_call(examples)  # call super, masking all inputs
         for i in range(len(batch["labels"])):
             for _ in range(self.mask_first_n_examples):
@@ -154,3 +155,13 @@ class InputMaskingDataCollator(DataCollatorForCompletionOnlyLM):
                 if mid_pos < end_pos:
                     batch["labels"][i][beg_pos:mid_pos] = -100
         return batch
+
+
+def load_unsloth_4bit(model_path):
+    from unsloth import FastLanguageModel
+
+    return FastLanguageModel.from_pretrained(
+        model_name=model_path,
+        dtype=None,
+        load_in_4bit=True,
+    )
