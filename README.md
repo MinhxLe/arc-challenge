@@ -5,9 +5,8 @@
 2. Install [just](https://github.com/casey/just).
 3. Run the following commands within the project directory to create a virtual env:
 ```
-uv venv --python 3.11
+uv sync
 source .venv/bin/activate
-uv pip install -r requirements.txt && uv pip install -e .
 pre-commmit install
 ```
 4. Get your `.env` from Minh.
