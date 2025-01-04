@@ -7,7 +7,22 @@ from unsloth import FastLanguageModel
 from unsloth import UnslothTrainer as Trainer, unsloth_train, is_bfloat16_supported
 from unsloth import UnslothTrainingArguments as TrainingArguments
 
-from datasets import load_from_disk
+from datasets import load_from_disk, Dataset
+import typing as ta
+
+
+def load_and_process_dataset(
+    get_dataset: ta.Callable[[], Dataset], path: str, use_cache: bool
+) -> Dataset:
+    if use_cache and os.path.exists(path):
+        dataset = load_from_disk(path)
+    else:
+        dataset = (
+            get_dataset().map(format_row, num_proc=24).filter(not_too_long, num_proc=24)
+        )
+        dataset.save_to_disk(path)
+    return dataset  # type: ignore
+
 
 # from model_tools import (
 #     save_model_and_tokenizer,
@@ -68,28 +83,26 @@ def not_too_long(row):
     )
 
 
-train_dataset_path = fine_tuning_config.data_config.train_dataset_path
-eval_dataset_path = fine_tuning_config.data_config.eval_dataset_path
+use_cache = fine_tuning_config.data_config.use_cache
+train_dataset_path = os.path.join(
+    fine_tuning_config.output_dir, "fine_tuning_data/train/"
+)
+eval_dataset_path = os.path.join(
+    fine_tuning_config.output_dir, "fine_tuning_data/eval/"
+)
 
-if os.path.exists(train_dataset_path):
-    train_dataset = load_from_disk(train_dataset_path)
-else:
-    train_dataset = (
-        fine_tuning_config.data_config.train_dataset_constructor()
-        .map(format_row, num_proc=24)
-        .filter(not_too_long, num_proc=24)
-    )
-    train_dataset.save_to_disk(train_dataset_path)
 
-if os.path.exists(eval_dataset_path):
-    eval_dataset = load_from_disk(eval_dataset_path)
-else:
-    eval_dataset = (
-        fine_tuning_config.data_config.eval_dataset_constructor()
-        .map(format_row, num_proc=24)
-        .filter(not_too_long, num_proc=24)
-    )
-    eval_dataset.save_to_disk(eval_dataset_path)
+train_dataset = load_and_process_dataset(
+    get_dataset=fine_tuning_config.data_config.get_train_dataset,
+    path=train_dataset_path,
+    use_cache=use_cache,
+)
+
+eval_dataset = load_and_process_dataset(
+    get_dataset=fine_tuning_config.data_config.get_eval_dataset,
+    path=eval_dataset_path,
+    use_cache=use_cache,
+)
 
 # run training
 FastLanguageModel.for_training(model)

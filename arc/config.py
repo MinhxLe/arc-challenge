@@ -33,10 +33,9 @@ class FineTuningModelConfig:
 
 @dataclass
 class FineTuningDataConfig:
-    train_dataset_path: str
-    eval_dataset_path: str
-    train_dataset_constructor: ta.Callable[[], Dataset]
-    eval_dataset_constructor: ta.Callable[[], Dataset]
+    get_train_dataset: ta.Callable[[], Dataset]
+    get_eval_dataset: ta.Callable[[], Dataset]
+    use_cache: bool = True
 
 
 @dataclass
@@ -126,7 +125,7 @@ class FineTuningConfig:
 ##### architects config
 
 
-def architects_train_data_constructor() -> Dataset:
+def get_architects_train_data() -> Dataset:
     base_train_dataset = dst.concat(
         dst.repeat(Datasets.concept_arc.get_dataset(), n=128),
         dst.repeat(Datasets.arc_public_train.get_dataset(), n=128),
@@ -147,7 +146,7 @@ def architects_train_data_constructor() -> Dataset:
     )
 
 
-def architects_eval_data_constructor() -> Dataset:
+def get_architects_eval_data() -> Dataset:
     return Datasets.arc_public_test.get_dataset()
 
 
@@ -183,10 +182,8 @@ architects_config = FineTuningConfig(
     ),
     model_tokenizer_formatter_preprocessor=architects_model_tokenizer_formatter_preprocessor,
     data_config=FineTuningDataConfig(
-        train_dataset_path="/shared/research/arc_challenge/data/train/2024_12_26_train/",
-        eval_dataset_path="/shared/research/arc_challenge/data/train/2024_12_26_eval/",
-        train_dataset_constructor=architects_train_data_constructor,
-        eval_dataset_constructor=architects_eval_data_constructor,
+        get_train_dataset=get_architects_train_data,
+        get_eval_dataset=get_architects_eval_data,
     ),
     lora_config=FineTuningLoraConfig(
         lora_rank=256,
