@@ -9,14 +9,12 @@ from arc import transform as t
 from unsloth import FastLanguageModel
 
 from tokenizers import Tokenizer
-from transformers import DataCollatorForLanguageModeling
 from arc import settings
 from datetime import datetime
 
 
 from arc.external.architects import (
     keep_single_char_tokens,
-    InputMaskingDataCollator,
 )
 
 
@@ -67,9 +65,6 @@ class FineTuningLoraConfig:
 class FineTuningSFTTConfig:
     random_state: int | None
     dataset_text_field: str = "text"
-    data_collator_constructor: ta.Optional[
-        ta.Callable[[Tokenizer, Formatter], DataCollatorForLanguageModeling]
-    ] = None
     max_seq_length: int = 2048
     per_device_train_batch_size: int = 8
     per_device_eval_batch_size: int = 4
@@ -154,18 +149,6 @@ def get_architects_eval_data() -> Dataset:
     return Datasets.arc_public_test.get_dataset()
 
 
-def architects_data_collator_constructor(
-    tokenizer, formatter
-) -> InputMaskingDataCollator:
-    return InputMaskingDataCollator(
-        instruction_template=formatter.input_head_token,
-        response_template=formatter.output_head_token,
-        mlm=False,
-        tokenizer=tokenizer,
-        mask_first_n_examples=1,
-    )
-
-
 def architects_model_tokenizer_formatter_preprocessor(model, tokenizer):
     keep_tok = list(
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?.:,;*+/-="
@@ -211,7 +194,6 @@ architects_config = FineTuningConfig(
     sftt_config=FineTuningSFTTConfig(
         random_state=42,
         max_seq_length=8192,
-        data_collator_constructor=architects_data_collator_constructor,
         per_device_train_batch_size=8,
         per_device_eval_batch_size=4,
         gradient_accumulation_steps=1,

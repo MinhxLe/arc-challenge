@@ -9,6 +9,9 @@ from unsloth import UnslothTrainingArguments as TrainingArguments
 
 from datasets import load_from_disk, Dataset
 import typing as ta
+from arc.external.architects import (
+    InputMaskingDataCollator,
+)
 
 
 def load_and_process_dataset(
@@ -114,9 +117,13 @@ trainer = Trainer(
     eval_dataset=eval_dataset,
     dataset_text_field=fine_tuning_config.sftt_config.dataset_text_field,
     max_seq_length=fine_tuning_config.sftt_config.max_seq_length,
-    data_collator=None
-    if fine_tuning_config.sftt_config.data_collator_constructor is None
-    else fine_tuning_config.sftt_config.data_collator_constructor(tokenizer, formatter),
+    data_collator=InputMaskingDataCollator(
+        instruction_template=formatter.input_head_token,
+        response_template=formatter.output_head_token,
+        mlm=False,
+        tokenizer=tokenizer,
+        mask_first_n_examples=1,
+    ),
     args=TrainingArguments(
         run_name=fine_tuning_config.output_dir,
         per_device_train_batch_size=fine_tuning_config.sftt_config.per_device_train_batch_size,
