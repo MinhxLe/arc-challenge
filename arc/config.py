@@ -14,7 +14,7 @@ from arc import settings
 from datetime import datetime
 
 
-from arc.architects import (
+from arc.external.architects import (
     keep_single_char_tokens,
     InputMaskingDataCollator,
 )
