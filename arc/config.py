@@ -33,9 +33,13 @@ class FineTuningModelConfig:
 
 @dataclass
 class FineTuningDataConfig:
-    get_train_dataset: ta.Callable[[], Dataset]
+    _get_train_dataset_using_seed: ta.Callable[[int], Dataset]
     get_eval_dataset: ta.Callable[[], Dataset]
+    seed: int
     use_cache: bool = True
+
+    def __post_init__(self):
+        self.get_train_dataset = lambda: self._get_train_dataset_using_seed(self.seed)
 
 
 @dataclass
@@ -125,24 +129,24 @@ class FineTuningConfig:
 ##### architects config
 
 
-def get_architects_train_data() -> Dataset:
+def get_architects_train_data_using_seed(seed: int) -> Dataset:
     base_train_dataset = dst.concat(
         dst.repeat(Datasets.concept_arc.get_dataset(), n=128),
         dst.repeat(Datasets.arc_public_train.get_dataset(), n=128),
         # [TODO] change to n_tasks=644
         Datasets.create_re_arc(
-            seed=42, n_tasks=100, test_set_size=1, train_set_size=5
+            seed=seed, n_tasks=100, test_set_size=1, train_set_size=5
         ).get_dataset(),
     )
     transformed_train_dataset = dst.concat(
         base_train_dataset,
         dst.apply_transform(base_train_dataset, t.Reflect(t.Reflect.Type.DIAGONAL)),
         *[dst.apply_transform(base_train_dataset, t.Rotate(i)) for i in range(4)],
-        dst.apply_transform(base_train_dataset, t.PermuteColor(seed=42)),
+        dst.apply_transform(base_train_dataset, t.PermuteColor(seed=seed)),
     )
     return dst.concat(
         transformed_train_dataset,
-        dst.shuffle_train_order(transformed_train_dataset, seed=42),
+        dst.shuffle_train_order(transformed_train_dataset, seed=seed),
     )
 
 
@@ -182,7 +186,8 @@ architects_config = FineTuningConfig(
     ),
     model_tokenizer_formatter_preprocessor=architects_model_tokenizer_formatter_preprocessor,
     data_config=FineTuningDataConfig(
-        get_train_dataset=get_architects_train_data,
+        seed=42,
+        _get_train_dataset_using_seed=get_architects_train_data_using_seed,
         get_eval_dataset=get_architects_eval_data,
     ),
     lora_config=FineTuningLoraConfig(
