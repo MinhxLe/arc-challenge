@@ -1,19 +1,10 @@
 import json
 import torch
+from arc.tokenizers import Formatter
 from tokenizers import Tokenizer
 from trl import DataCollatorForCompletionOnlyLM
 
 #### copied from architects, mutation everywhere
-
-fmt_opts = dict(
-    preprompt="ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjklmnpqrstuvwxyz",
-    query_beg="I",
-    reply_beg="\n+/-=O",
-    # don't think the below is used, and it's entangled with the tokenizer and don't want to deal with that
-    # reply_end="\n" + tokenizer.eos_token,
-    lines_sep="\n",
-    max_tokens=8192,
-)
 
 
 def get_or_map_special_tokens(data, mapping=None):
@@ -142,6 +133,7 @@ class InputMaskingDataCollator(DataCollatorForCompletionOnlyLM):
         self.mask_first_n_examples = mask_first_n_examples
 
     def torch_call(self, examples):
+        # [TODO] confirm understanding that this is working.
         batch = super().torch_call(examples)  # call super, masking all inputs
         for i in range(len(batch["labels"])):
             for _ in range(self.mask_first_n_examples):
@@ -154,3 +146,15 @@ class InputMaskingDataCollator(DataCollatorForCompletionOnlyLM):
                 if mid_pos < end_pos:
                     batch["labels"][i][beg_pos:mid_pos] = -100
         return batch
+
+
+### Creating this function for reuse in model loading for eval
+def preprocess_model_tokenizer_formatter(model, tokenizer):
+    keep_tok = list(
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?.:,;*+/-="
+    ) + tokenizer.tokenize("\n")
+
+    keep_single_char_tokens(model, tokenizer, keep=keep_tok, remove_unk=True)
+    tokenizer.padding = "right"
+
+    return model, tokenizer, Formatter(output_tail_token=tokenizer.eos_token)

@@ -1,20 +1,12 @@
 from dataclasses import dataclass
+from datasets import Dataset
 import torch
 import typing as ta
-from datasets import Dataset
 from arc.datasets.seed import Datasets
-
-from tokenizers import Tokenizer
-from transformers import DataCollatorForLanguageModeling
+from arc.datasets import transform as dst
+from arc import transform as t
 from arc import settings
 from datetime import datetime
-
-
-from arc.architects import (
-    fmt_opts,
-    keep_single_char_tokens,
-    InputMaskingDataCollator,
-)
 
 
 @dataclass
@@ -26,6 +18,17 @@ class FineTuningModelConfig:
     def __post_init__(self):
         if self.model_dtype and self.load_in_4bit:
             raise ValueError("expected model_dtype to be None if load_in_4bit")
+
+
+@dataclass
+class FineTuningDataConfig:
+    _get_train_dataset_using_seed: ta.Callable[[int], Dataset]
+    get_eval_dataset: ta.Callable[[], Dataset]
+    seed: int
+    use_cache: bool = True
+
+    def __post_init__(self):
+        self.get_train_dataset = lambda: self._get_train_dataset_using_seed(self.seed)
 
 
 @dataclass
@@ -53,14 +56,11 @@ class FineTuningLoraConfig:
 class FineTuningSFTTConfig:
     random_state: int | None
     dataset_text_field: str = "text"
-    data_collator_constructor: ta.Optional[
-        ta.Callable[[Tokenizer], DataCollatorForLanguageModeling]
-    ] = None
     max_seq_length: int = 2048
     per_device_train_batch_size: int = 8
+    per_device_eval_batch_size: int = 4
     gradient_accumulation_steps: int = 1
     warmup_ratio: float = 0.0
-    warmup_steps: int = 0
     num_train_epochs: int = 3
     learning_rate: float = 2e-4
     embedding_learning_rate: float = 1e-5
@@ -68,7 +68,9 @@ class FineTuningSFTTConfig:
     lr_scheduler_type: str = "cosine"
     logging_steps: int = 1
     optimizer: str = "adamw_torch_fused"
-    save_strategy: str = "epoch"
+    save_strategy: str = "steps"
+    save_steps: int = 1_000
+    save_total_limit: int = 10
     report_to: str = "wandb"
 
     def __post_init__(self):
@@ -82,11 +84,8 @@ class FineTuningSFTTConfig:
 class FineTuningConfig:
     name: str
 
-    data_loader: ta.Callable[[], Dataset]
-
     model_config: FineTuningModelConfig
-    model_and_tokenizer_preprocessor: ta.Callable
-
+    data_config: FineTuningDataConfig
     lora_config: FineTuningLoraConfig
     sftt_config: FineTuningSFTTConfig
 
@@ -111,42 +110,43 @@ class FineTuningConfig:
 ##### architects config
 
 
-def architects_data_loader() -> Dataset:
-    # the desired dataset isn't working yet
-    # return Datasets.create_re_arc(seed=42, n_tasks=3).get_dataset()
-    return Datasets.arc_public_train.get_dataset()
-
-
-def architects_data_collator_constructor(tokenizer) -> InputMaskingDataCollator:
-    return InputMaskingDataCollator(
-        instruction_template=fmt_opts["query_beg"],
-        response_template=fmt_opts["reply_beg"],
-        mlm=False,
-        tokenizer=tokenizer,
-        mask_first_n_examples=1,
+def get_architects_train_data_using_seed(seed: int) -> Dataset:
+    base_train_dataset = dst.concat(
+        dst.repeat(Datasets.concept_arc.get_dataset(), n=128),
+        dst.repeat(Datasets.arc_public_train.get_dataset(), n=128),
+        # [TODO] change to n_tasks=644
+        Datasets.create_re_arc(
+            seed=seed, n_tasks=100, test_set_size=1, train_set_size=5
+        ).get_dataset(),
+    )
+    transformed_train_dataset = dst.concat(
+        base_train_dataset,
+        dst.apply_transform(base_train_dataset, t.Reflect(t.Reflect.Type.DIAGONAL)),
+        *[dst.apply_transform(base_train_dataset, t.Rotate(i)) for i in range(4)],
+        dst.apply_transform(base_train_dataset, t.PermuteColor(seed=seed)),
+    )
+    return dst.concat(
+        transformed_train_dataset,
+        dst.shuffle_train_order(transformed_train_dataset, seed=seed),
     )
 
 
-def architects_model_and_tokenizer_preprocessor(model, tokenizer):
-    keep_tok = list(
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?.:,;*+/-="
-    ) + tokenizer.tokenize("\n")
-
-    keep_single_char_tokens(model, tokenizer, keep=keep_tok, remove_unk=True)
-    tokenizer.padding = "right"
-
-    return model, tokenizer
+def get_architects_eval_data() -> Dataset:
+    return Datasets.arc_public_test.get_dataset()
 
 
 architects_config = FineTuningConfig(
     name="architects",
     model_config=FineTuningModelConfig(
-        model="nvidia/Mistral-NeMo-Minitron-8B-Base",
+        model="chuanli11/Llama-3.2-3B-Instruct-uncensored",  # "nvidia/Mistral-NeMo-Minitron-8B-Base",
         model_dtype=None,
         load_in_4bit=True,
     ),
-    model_and_tokenizer_preprocessor=architects_model_and_tokenizer_preprocessor,
-    data_loader=architects_data_loader,
+    data_config=FineTuningDataConfig(
+        seed=42,
+        _get_train_dataset_using_seed=get_architects_train_data_using_seed,
+        get_eval_dataset=get_architects_eval_data,
+    ),
     lora_config=FineTuningLoraConfig(
         lora_rank=256,
         lora_alpha=24,
@@ -167,18 +167,17 @@ architects_config = FineTuningConfig(
     ),
     sftt_config=FineTuningSFTTConfig(
         random_state=42,
-        max_seq_length=fmt_opts["max_tokens"],
-        data_collator_constructor=architects_data_collator_constructor,
-        per_device_train_batch_size=4,
-        gradient_accumulation_steps=2,
+        max_seq_length=8192,
+        per_device_train_batch_size=8,
+        per_device_eval_batch_size=4,
+        gradient_accumulation_steps=1,
         warmup_ratio=0.25,
-        warmup_steps=0,
         num_train_epochs=1,
         learning_rate=1e-4,
         embedding_learning_rate=1e-5,
         weight_decay=0,
         lr_scheduler_type="cosine",
-        logging_steps=10,
+        logging_steps=500,
         optimizer="adamw_8bit",
     ),
 )
