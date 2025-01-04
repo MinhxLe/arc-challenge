@@ -5,16 +5,6 @@ from trl import DataCollatorForCompletionOnlyLM
 
 #### copied from architects, mutation everywhere
 
-fmt_opts = dict(
-    preprompt="ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjklmnpqrstuvwxyz",
-    query_beg="I",
-    reply_beg="\n+/-=O",
-    # don't think the below is used, and it's entangled with the tokenizer and don't want to deal with that
-    # reply_end="\n" + tokenizer.eos_token,
-    lines_sep="\n",
-    max_tokens=8192,
-)
-
 
 def get_or_map_special_tokens(data, mapping=None):
     tokens = set()
@@ -155,13 +145,3 @@ class InputMaskingDataCollator(DataCollatorForCompletionOnlyLM):
                 if mid_pos < end_pos:
                     batch["labels"][i][beg_pos:mid_pos] = -100
         return batch
-
-
-def load_unsloth_4bit(model_path):
-    from unsloth import FastLanguageModel
-
-    return FastLanguageModel.from_pretrained(
-        model_name=model_path,
-        dtype=None,
-        load_in_4bit=True,
-    )
