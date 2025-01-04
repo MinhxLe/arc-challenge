@@ -1,5 +1,6 @@
 import json
 import torch
+from arc.tokenizers import Formatter
 from tokenizers import Tokenizer
 from trl import DataCollatorForCompletionOnlyLM
 
@@ -145,3 +146,15 @@ class InputMaskingDataCollator(DataCollatorForCompletionOnlyLM):
                 if mid_pos < end_pos:
                     batch["labels"][i][beg_pos:mid_pos] = -100
         return batch
+
+
+### Creating this function for reuse in model loading for eval
+def preprocess_model_tokenizer_formatter(model, tokenizer):
+    keep_tok = list(
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?.:,;*+/-="
+    ) + tokenizer.tokenize("\n")
+
+    keep_single_char_tokens(model, tokenizer, keep=keep_tok, remove_unk=True)
+    tokenizer.padding = "right"
+
+    return model, tokenizer, Formatter(output_tail_token=tokenizer.eos_token)

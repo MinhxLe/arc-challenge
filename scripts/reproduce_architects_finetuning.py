@@ -11,6 +11,7 @@ from datasets import load_from_disk, Dataset
 import typing as ta
 from arc.external.architects import (
     InputMaskingDataCollator,
+    preprocess_model_tokenizer_formatter,
 )
 
 
@@ -51,9 +52,7 @@ model, tokenizer = FastLanguageModel.from_pretrained(
     load_in_4bit=fine_tuning_config.model_config.load_in_4bit,
 )
 
-model, tokenizer, formatter = fine_tuning_config.model_tokenizer_formatter_preprocessor(
-    model, tokenizer
-)
+model, tokenizer, formatter = preprocess_model_tokenizer_formatter(model, tokenizer)
 
 # create lora model
 model = FastLanguageModel.get_peft_model(

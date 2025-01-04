@@ -4,18 +4,9 @@ import torch
 import typing as ta
 from arc.datasets.seed import Datasets
 from arc.datasets import transform as dst
-from arc.tokenizers import Formatter
 from arc import transform as t
-from unsloth import FastLanguageModel
-
-from tokenizers import Tokenizer
 from arc import settings
 from datetime import datetime
-
-
-from arc.external.architects import (
-    keep_single_char_tokens,
-)
 
 
 @dataclass
@@ -94,11 +85,6 @@ class FineTuningConfig:
     name: str
 
     model_config: FineTuningModelConfig
-    model_tokenizer_formatter_preprocessor: ta.Callable[
-        [FastLanguageModel, Tokenizer],
-        ta.Tuple[FastLanguageModel, Tokenizer, Formatter],
-    ]
-
     data_config: FineTuningDataConfig
     lora_config: FineTuningLoraConfig
     sftt_config: FineTuningSFTTConfig
@@ -149,17 +135,6 @@ def get_architects_eval_data() -> Dataset:
     return Datasets.arc_public_test.get_dataset()
 
 
-def architects_model_tokenizer_formatter_preprocessor(model, tokenizer):
-    keep_tok = list(
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?.:,;*+/-="
-    ) + tokenizer.tokenize("\n")
-
-    keep_single_char_tokens(model, tokenizer, keep=keep_tok, remove_unk=True)
-    tokenizer.padding = "right"
-
-    return model, tokenizer, Formatter(output_tail_token=tokenizer.eos_token)
-
-
 architects_config = FineTuningConfig(
     name="architects",
     model_config=FineTuningModelConfig(
@@ -167,7 +142,6 @@ architects_config = FineTuningConfig(
         model_dtype=None,
         load_in_4bit=True,
     ),
-    model_tokenizer_formatter_preprocessor=architects_model_tokenizer_formatter_preprocessor,
     data_config=FineTuningDataConfig(
         seed=42,
         _get_train_dataset_using_seed=get_architects_train_data_using_seed,
