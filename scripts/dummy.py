@@ -1,40 +1,14 @@
 from arc.config import all_configs
 from peft import PeftModel
 import peft
-import torch
 from unsloth import FastLanguageModel
-from arc.external.architects import preprocess_model_tokenizer_formatter
+from arc.external.architects import (
+    preprocess_model_tokenizer_formatter,
+    fix_dtypes,
+    get_and_fix_peft_weights,
+)
 from arc.datasets.seed import Datasets
 from arc.core import Task
-
-
-def fix_dtypes(model, fix_weights=True, fix_quant_states=True):
-    # fix some data types (workaround for unsloth)
-    for module in model.modules():
-        weight = getattr(module, "weight", None)
-        if weight is not None:
-            if torch.is_floating_point(weight):
-                if fix_weights and weight.dtype != model.dtype:
-                    module.to(model.dtype)
-            else:
-                qs = getattr(weight, "quant_state", None)
-                if qs is not None:
-                    if fix_quant_states and qs.dtype != model.dtype:
-                        qs.dtype = model.dtype
-    return model
-
-
-def get_and_fix_peft_weights(store):
-    # change some keys (workaround for added 'modules_to_save')
-    state_dict = peft.load_peft_weights(store)
-    for k in list(state_dict.keys()):
-        if "modules_to_save" in k:
-            del state_dict[k]
-            original_module_key = k.replace(".modules_to_save.", ".original_module.")
-            if original_module_key in state_dict:
-                del state_dict[original_module_key]
-            assert k.replace(".modules_to_save.", ".") in state_dict
-    return state_dict
 
 
 def generate_text(model, tokenizer, message, max_new_tokens=100):
