@@ -133,11 +133,15 @@ class SolutionGenerator:
             logger.error(f"Error generating response: {str(e)}")
             raise
 
-    def get_next_token_distribution(self, prompt: str) -> Dict[str, float]:
-        """Get distribution of probabilities for all possible next tokens.
+    def get_next_tokens_above_threshold(
+        self, prompt: str, threshold: float
+    ) -> Dict[str, float]:
+        """Get probabilities for all possible next tokens
+           with probability of occurrence >= threshold.
 
         Args:
             prompt: Input prompt text
+            threshold: minimum acceptable probability
 
         Returns:
             Dictionary mapping token text to probability
@@ -153,12 +157,14 @@ class SolutionGenerator:
             with torch.no_grad():
                 outputs = self.model(**inputs)
                 logits = outputs.logits[:, -1, :]
-                probs = F.softmax(logits, dim=-1)
+                probs = F.softmax(logits, dim=-1)[0]
+
+            indices_above_threshold = torch.where(probs >= threshold)[0]
 
             # Convert to dictionary of token: probability
             token_prob_dict = {}
-            for idx, value in enumerate(probs[0]):
-                token_prob_dict[self.tokenizer.decode([idx])] = value.item()
+            for idx in indices_above_threshold:
+                token_prob_dict[self.tokenizer.decode([idx])] = probs[idx].item()
 
             return token_prob_dict
 
