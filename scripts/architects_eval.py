@@ -6,13 +6,13 @@ from arc.external.architects import (
 )
 import torch
 import torch.nn.functional as F
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict
 from dataclasses import dataclass
 from loguru import logger
 from unsloth import FastLanguageModel
 import peft
 import numpy as np
+import math
 
 fine_tuning_config = next(
     config for config in all_configs if config.name == "architects"
@@ -21,11 +21,10 @@ fine_tuning_config = next(
 
 @dataclass
 class SolutionCandidate:
-    """Data class to store candidate responses and their probabilities."""
+    """Data class to store candidate responses and their log-probabilities."""
 
     text: str
-    probability: float
-    token_probabilities: List[float]
+    log_probability: float
 
 
 class SolutionGenerator:
@@ -134,17 +133,17 @@ class SolutionGenerator:
             raise
 
     def get_next_tokens_above_threshold(
-        self, prompt: str, threshold: float
+        self, prompt: str, log_probability_threshold: float
     ) -> Dict[str, float]:
         """Get probabilities for all possible next tokens
            with probability of occurrence >= threshold.
 
         Args:
             prompt: Input prompt text
-            threshold: minimum acceptable probability
+            log_probability_threshold: minimum acceptable probability
 
         Returns:
-            Dictionary mapping token text to probability
+            Dictionary mapping token text to log probability
         """
         if not self.model or not self.tokenizer:
             raise RuntimeError("Model or tokenizer not initialized")
@@ -157,116 +156,97 @@ class SolutionGenerator:
             with torch.no_grad():
                 outputs = self.model(**inputs)
                 logits = outputs.logits[:, -1, :]
-                probs = F.softmax(logits, dim=-1)[0]
+                log_probs = F.log_softmax(logits, dim=-1)[0]
 
-            indices_above_threshold = torch.where(probs >= threshold)[0]
+            indices_above_threshold = torch.where(
+                log_probs >= log_probability_threshold
+            )[0]
 
-            # Convert to dictionary of token: probability
-            token_prob_dict = {}
+            # Convert to dictionary of token: log_probability
+            token_log_prob_dict = {}
             for idx in indices_above_threshold:
-                token_prob_dict[self.tokenizer.decode([idx])] = probs[idx].item()
+                token_log_prob_dict[self.tokenizer.decode([idx])] = log_probs[
+                    idx
+                ].item()
 
-            return token_prob_dict
+            return token_log_prob_dict
 
         except Exception as e:
             logger.error(f"Error getting token distribution: {str(e)}")
             raise
 
+    def validate_response_is_grid(self, response: str) -> bool:
+        # TODO(Sid): implement something like return self.formatter.validate_is_grid(response)
+        return True
 
-# def get_candidate_responses(
-#         self,
-#         prompt: str,
-#         probability_threshold: float = 0.1,
-#         max_depth: int = 10,
-#         max_candidates: int = 100,
-#         format_checker: callable = None
-#     ) -> List[CandidateResponse]:
-#         """Generate candidate responses using depth-first search with probability threshold.
+    def get_candidate_responses(
+        self,
+        prompt: str,
+        response_probability_threshold: float = 0.1,
+        max_tokens: int = 10000,
+    ) -> List[SolutionCandidate]:
+        """Generate candidate responses using depth-first search with probability threshold.
 
-#         Args:
-#             prompt: Input prompt text
-#             probability_threshold: Minimum cumulative probability threshold
-#             max_depth: Maximum depth for token generation
-#             max_candidates: Maximum number of candidates to return
-#             format_checker: Optional function to validate response format
+        Args:
+            prompt: Input prompt text
+            response_probability_threshold: Minimum cumulative probability threshold
+            max_tokens: Maximum length of response
 
-#         Returns:
-#             List of CandidateResponse objects
-#         """
-#         def dfs(
-#             current_text: str,
-#             current_prob: float,
-#             token_probs: List[float],
-#             depth: int,
-#             candidates: List[CandidateResponse]
-#         ) -> None:
-#             if depth >= max_depth or len(candidates) >= max_candidates:
-#                 return
+        Returns:
+            List of CandidateResponse objects
+        """
 
-#             # Get next token distribution
-#             next_tokens = self.get_next_token_distribution(current_text)
+        log_response_prob_threshold = math.log(response_probability_threshold)
 
-#             for token, prob in next_tokens.items():
-#                 new_prob = current_prob * prob
-#                 if new_prob < probability_threshold:
-#                     continue
+        # Note: this function uses mutation of variables outside its scope.
+        # We could change this to return candidates instead... I think.
+        def dfs(
+            current_text: str,
+            current_log_prob: float,
+            depth: int,
+            candidates: List[SolutionCandidate],
+        ) -> None:
+            if depth >= max_tokens:
+                return
 
-#                 new_text = current_text + token
-#                 new_token_probs = token_probs + [prob]
+            next_allowable_tokens = self.get_next_tokens_above_threshold(
+                prompt=current_text,
+                log_probability_threshold=log_response_prob_threshold
+                - current_log_prob,
+            )
 
-#                 # Check if sequence ends with EOS token
-#                 if token == self.tokenizer.eos_token:
-#                     # If format checker provided, validate the response
-#                     if format_checker is None or format_checker(new_text):
-#                         candidates.append(CandidateResponse(
-#                             text=new_text,
-#                             probability=new_prob,
-#                             token_probabilities=new_token_probs
-#                         ))
-#                 else:
-#                     # Continue DFS
-#                     dfs(new_text, new_prob, new_token_probs, depth + 1, candidates)
+            for token, log_prob in next_allowable_tokens.items():
+                new_text = current_text + token
+                new_log_prob = current_log_prob + log_prob
 
-#         try:
-#             candidates = []
-#             dfs(prompt, 1.0, [], 0, candidates)
+                if token == self.tokenizer.eos_token:
+                    if self.validate_response_is_grid(new_text):
+                        candidates.append(
+                            SolutionCandidate(
+                                text=new_text,
+                                log_probability=new_log_prob,
+                            )
+                        )
+                else:
+                    # Continue DFS
+                    dfs(
+                        current_text=new_text,
+                        current_log_prob=new_log_prob,
+                        depth=depth + 1,
+                        candidates=candidates,
+                    )
 
-#             # Sort by probability
-#             candidates.sort(key=lambda x: x.probability, reverse=True)
+        try:
+            candidates = []
+            dfs(
+                current_text=prompt,
+                current_log_prob=0.0,
+                depth=0,
+                candidates=candidates,
+            )
 
-#             return candidates[:max_candidates]
+            return candidates
 
-#         except Exception as e:
-#             logger.error(f"Error generating candidate responses: {str(e)}")
-#             raise
-
-# # Example usage
-# if __name__ == "__main__":
-#     # Initialize inference module
-#     inference = ModelInference("checkpoint-30000")
-
-#     # Load model and tokenizer
-#     inference.load_model()
-#     inference.load_tokenizer()
-
-#     # Example format checker
-#     def example_format_checker(text: str) -> bool:
-#         # Implement your format validation logic here
-#         return True
-
-#     # Generate response
-#     prompt = "Your prompt here"
-#     response, prob = inference.generate_response(prompt)
-#     print(f"Generated response: {response}")
-#     print(f"Response probability: {prob}")
-
-#     # Get next token distribution
-#     next_tokens = inference.get_next_token_distribution(prompt)
-#     print(f"Next token distribution: {next_tokens}")
-
-#     # Get candidate responses
-#     candidates = inference.get_candidate_responses(
-#         prompt,
-#         format_checker=example_format_checker
-#     )
-#     print(f"Found {len(candidates)} candidate responses")
+        except Exception as e:
+            logger.error(f"Error generating candidate responses: {str(e)}")
+            raise
