@@ -196,6 +196,11 @@ class SolutionGenerator:
             List of CandidateResponse objects
         """
 
+        # Optimizations:
+        # KV caching
+        # Parallelize DFS and merge results - might be able to batch eval
+        # Postpone decoding until the end (don't decode in the next_token function), maybe batch it?
+
         log_response_prob_threshold = math.log(response_probability_threshold)
 
         # Note: this function uses mutation of variables outside its scope.
