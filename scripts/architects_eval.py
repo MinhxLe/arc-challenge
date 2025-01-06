@@ -83,7 +83,7 @@ class SolutionGenerator:
             logger.error(f"Error loading model: {str(e)}")
             raise
 
-    def generate_response(
+    def generate_full_response(
         self, prompt: str, max_new_tokens: int = 10000
     ) -> Tuple[str, float]:
         """Generate a complete response for the given prompt with its probability.
@@ -103,12 +103,13 @@ class SolutionGenerator:
             inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
 
             # Generate with logits
-            outputs = self.model.generate(
-                **inputs,
-                max_new_tokens=max_new_tokens,
-                output_scores=True,
-                return_dict_in_generate=True,
-            )
+            with torch.no_grad():
+                outputs = self.model.generate(
+                    **inputs,
+                    max_new_tokens=max_new_tokens,
+                    output_scores=True,
+                    return_dict_in_generate=True,
+                )
 
             # Get generated text
             input_length = inputs["input_ids"].shape[1]
@@ -132,46 +133,38 @@ class SolutionGenerator:
             logger.error(f"Error generating response: {str(e)}")
             raise
 
-    # def get_next_token_distribution(
-    #     self, prompt: str, top_k: int = None
-    # ) -> Dict[str, float]:
-    #     """Get distribution of probabilities for all possible next tokens.
+    def get_next_token_distribution(self, prompt: str) -> Dict[str, float]:
+        """Get distribution of probabilities for all possible next tokens.
 
-    #     Args:
-    #         prompt: Input prompt text
-    #         top_k: Optional limit to return only top k tokens
+        Args:
+            prompt: Input prompt text
 
-    #     Returns:
-    #         Dictionary mapping token text to probability
-    #     """
-    #     if not self.model or not self.tokenizer:
-    #         raise RuntimeError("Model or tokenizer not initialized")
+        Returns:
+            Dictionary mapping token text to probability
+        """
+        if not self.model or not self.tokenizer:
+            raise RuntimeError("Model or tokenizer not initialized")
 
-    #     try:
-    #         # Tokenize input
-    #         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
+        try:
+            # Tokenize input
+            inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
 
-    #         # Get model output
-    #         with torch.no_grad():
-    #             outputs = self.model(**inputs)
-    #             logits = outputs.logits[:, -1, :]
-    #             probs = F.softmax(logits, dim=-1)
+            # Get model output
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+                logits = outputs.logits[:, -1, :]
+                probs = F.softmax(logits, dim=-1)
 
-    #         # Convert to dictionary of token: probability
-    #         token_probs = {}
-    #         values, indices = torch.topk(
-    #             probs[0], k=top_k if top_k else probs.shape[-1]
-    #         )
+            # Convert to dictionary of token: probability
+            token_prob_dict = {}
+            for idx, value in enumerate(probs[0]):
+                token_prob_dict[self.tokenizer.decode([idx])] = value.item()
 
-    #         for value, idx in zip(values, indices):
-    #             token = self.tokenizer.decode([idx])
-    #             token_probs[token] = value.item()
+            return token_prob_dict
 
-    #         return token_probs
-
-    #     except Exception as e:
-    #         logger.error(f"Error getting token distribution: {str(e)}")
-    #         raise
+        except Exception as e:
+            logger.error(f"Error getting token distribution: {str(e)}")
+            raise
 
 
 # def get_candidate_responses(
