@@ -227,3 +227,18 @@ class SolutionGenerator:
         except Exception as e:
             logger.error(f"Error getting next token distribution: {str(e)}")
             raise
+
+
+# from arc.core import Task
+# from arc.datasets.seed import Datasets
+
+# sg = SolutionGenerator(
+#     "/shared/research/arc_challenge/runs/architects_copy_2024-12-26_keepers/checkpoint-30000/"
+# )
+
+# test_example = sg.formatter.format_task(
+#     Task.from_dict(Datasets.arc_public_test.get_dataset()[0]),
+#     include_test_output=False,
+# )
+
+# sg.get_candidate_responses(test_example, response_probability_threshold=0.01)
