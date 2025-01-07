@@ -167,9 +167,6 @@ def preprocess_model_tokenizer_formatter(model, tokenizer):
 
 # Mostly copied from architects
 def fix_dtypes(model):
-    assert hasattr(
-        model, "peft_type"
-    ), "This method is only known to work for peft models."
     # Keeping these variables to be able to trace lineage from architects' code
     # where these conditionals are used below.
     fix_weights = True
@@ -249,6 +246,11 @@ def load_model_tokenizer_formatter(
         assert (
             not weight_set_result.unexpected_keys
         ), "error loading weights - some keys not available in model"
+
+        # This part of the copy/paste from architects isn't working.
+        # assert hasattr(
+        #     model, "peft_type"
+        # ), "This method is only known to work for peft models."
 
         model = fix_dtypes(model.merge_and_unload())
 
