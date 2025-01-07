@@ -4,6 +4,10 @@ from arc.tokenizers import Formatter
 from tokenizers import Tokenizer
 from trl import DataCollatorForCompletionOnlyLM
 import peft
+import typing as ta
+from unsloth import FastLanguageModel
+from arc.config import FineTuningConfig
+from loguru import logger
 
 #### copied from architects, mutation everywhere
 
@@ -161,11 +165,20 @@ def preprocess_model_tokenizer_formatter(model, tokenizer):
     return model, tokenizer, Formatter(output_tail_token=tokenizer.eos_token)
 
 
-def fix_dtypes(model, fix_weights=True, fix_quant_states=True):
+# Mostly copied from architects
+def fix_dtypes(model):
+    assert hasattr(
+        model, "peft_type"
+    ), "This method is only known to work for peft models."
+    # Keeping these variables to be able to trace lineage from architects' code
+    # where these conditionals are used below.
+    fix_weights = True
+    fix_quant_states = True
     # fix some data types (workaround for unsloth)
     for module in model.modules():
         weight = getattr(module, "weight", None)
         if weight is not None:
+            # copied over unclear logical branching from architects'
             if torch.is_floating_point(weight):
                 if fix_weights and weight.dtype != model.dtype:
                     module.to(model.dtype)
@@ -177,6 +190,7 @@ def fix_dtypes(model, fix_weights=True, fix_quant_states=True):
     return model
 
 
+# Mostly copied from architects
 def get_and_fix_peft_weights(store):
     # change some keys (workaround for added 'modules_to_save')
     state_dict = peft.load_peft_weights(store)
@@ -188,3 +202,54 @@ def get_and_fix_peft_weights(store):
                 del state_dict[original_module_key]
             assert k.replace(".modules_to_save.", ".") in state_dict
     return state_dict
+
+
+# Helper function to abstract away from of the architects' manipulations
+def load_model_tokenizer_formatter(
+    fine_tuning_config: FineTuningConfig,
+    peft_trainer_checkpoint_dir: ta.Optional[str] = None,
+) -> FastLanguageModel:
+    # load base model & reduce embedding size
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        model_name=fine_tuning_config.model_config.model,
+        dtype=fine_tuning_config.model_config.model_dtype,
+        load_in_4bit=fine_tuning_config.model_config.load_in_4bit,
+    )
+
+    model, tokenizer, formatter = preprocess_model_tokenizer_formatter(model, tokenizer)
+
+    if peft_trainer_checkpoint_dir is None:
+        # create lora model
+        model = FastLanguageModel.get_peft_model(
+            model=model,
+            target_modules=fine_tuning_config.lora_config.target_modules,
+            r=fine_tuning_config.lora_config.lora_rank,
+            lora_alpha=fine_tuning_config.lora_config.lora_alpha,
+            lora_dropout=fine_tuning_config.lora_config.lora_dropout,
+            bias=fine_tuning_config.lora_config.bias,
+            use_gradient_checkpointing="unsloth",
+            random_state=fine_tuning_config.lora_config.random_state,
+            use_rslora=fine_tuning_config.lora_config.use_rslora,
+            loftq_config=fine_tuning_config.lora_config.loftq_config,
+        )
+
+    else:
+        logger.info(f"Loading model from {peft_trainer_checkpoint_dir}")
+
+        model = peft.PeftModel.from_pretrained(
+            model=model,
+            model_id=peft_trainer_checkpoint_dir,
+            device_map="cuda",
+        )
+
+        weight_set_result = peft.set_peft_model_state_dict(
+            model,
+            get_and_fix_peft_weights(peft_trainer_checkpoint_dir),
+        )
+        assert (
+            not weight_set_result.unexpected_keys
+        ), "error loading weights - some keys not available in model"
+
+        model = fix_dtypes(model.merge_and_unload())
+
+    return model, tokenizer, formatter

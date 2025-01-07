@@ -1,16 +1,11 @@
 from arc.config import all_configs
-from arc.external.architects import (
-    preprocess_model_tokenizer_formatter,
-    get_and_fix_peft_weights,
-    fix_dtypes,
-)
+from arc.external.architects import load_model_tokenizer_formatter
 import torch
 import torch.nn.functional as F
 from typing import List, Tuple, Dict
 from dataclasses import dataclass
 from loguru import logger
 from unsloth import FastLanguageModel
-import peft
 import numpy as np
 import math
 
@@ -44,33 +39,11 @@ class SolutionGenerator:
     def load_model(self) -> None:
         """Load the fine-tuned model from checkpoint."""
         try:
-            logger.info(f"Loading model from {self.peft_checkpoint_path}")
-
-            model, tokenizer = FastLanguageModel.from_pretrained(
-                model_name=fine_tuning_config.model_config.model,
-                dtype=fine_tuning_config.model_config.model_dtype,
-                load_in_4bit=fine_tuning_config.model_config.load_in_4bit,
+            model, tokenizer, formatter = load_model_tokenizer_formatter(
+                fine_tuning_config, self.peft_checkpoint_path
             )
 
-            model, tokenizer, formatter = preprocess_model_tokenizer_formatter(
-                model, tokenizer
-            )
-
-            model = peft.PeftModel.from_pretrained(
-                model=model,
-                model_id=self.peft_checkpoint_path,
-                device_map="cuda",
-            )
-
-            weight_set_result = peft.set_peft_model_state_dict(
-                model,
-                get_and_fix_peft_weights(self.peft_checkpoint_path),
-            )
-            assert (
-                not weight_set_result.unexpected_keys
-            ), "error loading weights - some keys not available in model"
-
-            self.model = fix_dtypes(model.merge_and_unload())
+            self.model = model
             self.tokenizer = tokenizer
             self.formatter = formatter
 
@@ -172,12 +145,16 @@ class SolutionGenerator:
             return token_log_prob_dict
 
         except Exception as e:
-            logger.error(f"Error getting token distribution: {str(e)}")
+            logger.error(f"Error getting next token distribution: {str(e)}")
             raise
 
-    def validate_response_is_grid(self, response: str) -> bool:
-        # TODO(Sid): implement something like return self.formatter.validate_is_grid(response)
-        return True
+    def validate_response_is_grid(self, input: str, response: str) -> bool:
+        try:
+            self.formatter.parse_grid(response)
+            return True
+        except Exception as e:
+            logger.error(f"Error parsing response into grid {str(e)}")
+            return False
 
     def get_candidate_responses(
         self,
