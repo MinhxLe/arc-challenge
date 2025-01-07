@@ -187,6 +187,27 @@ class SolutionGenerator:
             logger.error(f"Error generating candidate responses: {str(e)}")
             raise
 
+    def _get_response_log_probability(self, prompt: str, response: str) -> float:
+        FastLanguageModel.for_inference(self.model)
+
+        full_text = f"{prompt}{response}"
+        input_ids = self.tokenizer.encode(prompt, return_tensors="pt")
+        full_ids = self.tokenizer.encode(full_text, return_tensors="pt")
+        response_ids = full_ids[:, input_ids.shape[1] :]
+
+        with torch.no_grad():
+            outputs = self.model(full_ids.to(self.device))
+            logits = outputs.logits
+
+        response_logits = logits[:, (input_ids.shape[1] - 1) : -1, :]
+        probs = F.softmax(response_logits, dim=-1)
+
+        response_token_log_probs = torch.gather(
+            probs, 2, response_ids.to(self.device).unsqueeze(-1)
+        ).squeeze(-1)
+
+        return torch.sum(torch.log(response_token_log_probs)).item()
+
     def _get_next_tokens_above_threshold(
         self, prompt: str, log_probability_threshold: float
     ) -> Dict[str, float]:
@@ -229,6 +250,8 @@ class SolutionGenerator:
             raise
 
 
+# Example usage:
+
 # from arc.core import Task
 # from arc.datasets.seed import Datasets
 
@@ -241,4 +264,6 @@ class SolutionGenerator:
 #     include_test_output=False,
 # )
 
-# sg.get_candidate_responses(test_example, response_probability_threshold=0.01)
+# candidates = sg.get_candidate_responses(test_example, response_probability_threshold=0.01)
+# candidates[0].log_probability
+# sg._get_response_log_probability(prompt=test_example,response=candidates[0].solution_str)
