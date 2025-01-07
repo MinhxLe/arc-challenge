@@ -8,6 +8,7 @@ from loguru import logger
 from unsloth import FastLanguageModel
 import numpy as np
 import math
+from arc.core import Grid
 
 fine_tuning_config = next(
     config for config in all_configs if config.name == "architects"
@@ -18,7 +19,9 @@ fine_tuning_config = next(
 class SolutionCandidate:
     """Data class to store candidate responses and their log-probabilities."""
 
-    text: str
+    full_text: str
+    solution_str: str
+    solution_grid: Grid
     log_probability: float
 
 
@@ -146,13 +149,20 @@ class SolutionGenerator:
                 new_log_prob = current_log_prob + log_prob
 
                 if token == self.tokenizer.eos_token:
-                    if self._validate_response_is_grid(new_text):
+                    try:
                         candidates.append(
                             SolutionCandidate(
-                                text=new_text,
+                                full_text=new_text,
+                                solution_str=new_text[len(prompt) :],
+                                solution_grid=self.formatter.parse_test_output_grid(
+                                    new_text
+                                ),
                                 log_probability=new_log_prob,
                             )
                         )
+                    except ValueError:
+                        # assuming this is due to malformed grid
+                        pass
                 else:
                     # Continue DFS
                     dfs(
@@ -217,11 +227,3 @@ class SolutionGenerator:
         except Exception as e:
             logger.error(f"Error getting next token distribution: {str(e)}")
             raise
-
-    def _validate_response_is_grid(self, input: str, response: str) -> bool:
-        try:
-            self.formatter.parse_grid(response)
-            return True
-        except Exception as e:
-            logger.error(f"Error parsing response into grid {str(e)}")
-            return False
