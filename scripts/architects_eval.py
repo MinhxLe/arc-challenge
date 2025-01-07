@@ -99,55 +99,6 @@ class SolutionGenerator:
             logger.error(f"Error generating response: {str(e)}")
             raise
 
-    def _get_next_tokens_above_threshold(
-        self, prompt: str, log_probability_threshold: float
-    ) -> Dict[str, float]:
-        """Get probabilities for all possible next tokens
-           with probability of occurrence >= threshold.
-
-        Args:
-            prompt: Input prompt text
-            log_probability_threshold: minimum acceptable probability
-
-        Returns:
-            Dictionary mapping token text to log probability
-        """
-
-        try:
-            # Tokenize input
-            inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
-
-            # Get model output
-            with torch.no_grad():
-                outputs = self.model(**inputs)
-                logits = outputs.logits[:, -1, :]
-                log_probs = F.log_softmax(logits, dim=-1)[0]
-
-            indices_above_threshold = torch.where(
-                log_probs >= log_probability_threshold
-            )[0]
-
-            # Convert to dictionary of token: log_probability
-            token_log_prob_dict = {}
-            for idx in indices_above_threshold:
-                token_log_prob_dict[self.tokenizer.decode([idx])] = log_probs[
-                    idx
-                ].item()
-
-            return token_log_prob_dict
-
-        except Exception as e:
-            logger.error(f"Error getting next token distribution: {str(e)}")
-            raise
-
-    def _validate_response_is_grid(self, input: str, response: str) -> bool:
-        try:
-            self.formatter.parse_grid(response)
-            return True
-        except Exception as e:
-            logger.error(f"Error parsing response into grid {str(e)}")
-            return False
-
     def get_candidate_responses(
         self,
         prompt: str,
@@ -168,7 +119,7 @@ class SolutionGenerator:
         # Optimizations:
         # KV caching
         # Parallelize DFS and merge results - might be able to batch eval
-        # Postpone decoding until the end (don't decode in the next_token function), maybe batch it?
+        # Postpone decoding until the end (don't encode/decode in the next_token function) - but need to also handle attention mask
 
         FastLanguageModel.for_inference(self.model)
         log_response_prob_threshold = math.log(response_probability_threshold)
@@ -225,3 +176,52 @@ class SolutionGenerator:
         except Exception as e:
             logger.error(f"Error generating candidate responses: {str(e)}")
             raise
+
+    def _get_next_tokens_above_threshold(
+        self, prompt: str, log_probability_threshold: float
+    ) -> Dict[str, float]:
+        """Get probabilities for all possible next tokens
+           with probability of occurrence >= threshold.
+
+        Args:
+            prompt: Input prompt text
+            log_probability_threshold: minimum acceptable probability
+
+        Returns:
+            Dictionary mapping token text to log probability
+        """
+
+        try:
+            # Tokenize input
+            inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
+
+            # Get model output
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+                logits = outputs.logits[:, -1, :]
+                log_probs = F.log_softmax(logits, dim=-1)[0]
+
+            indices_above_threshold = torch.where(
+                log_probs >= log_probability_threshold
+            )[0]
+
+            # Convert to dictionary of token: log_probability
+            token_log_prob_dict = {}
+            for idx in indices_above_threshold:
+                token_log_prob_dict[self.tokenizer.decode([idx])] = log_probs[
+                    idx
+                ].item()
+
+            return token_log_prob_dict
+
+        except Exception as e:
+            logger.error(f"Error getting next token distribution: {str(e)}")
+            raise
+
+    def _validate_response_is_grid(self, input: str, response: str) -> bool:
+        try:
+            self.formatter.parse_grid(response)
+            return True
+        except Exception as e:
+            logger.error(f"Error parsing response into grid {str(e)}")
+            return False
