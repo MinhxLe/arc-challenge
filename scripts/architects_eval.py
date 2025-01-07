@@ -29,11 +29,10 @@ class SolutionGenerator:
             checkpoint_path: Path to the model checkpoint
         """
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model = None
-        self.tokenizer = None
         self.peft_checkpoint_path = peft_checkpoint_path
+        self._load_model()
 
-    def load_model(self) -> None:
+    def _load_model(self) -> None:
         """Load the fine-tuned model from checkpoint."""
         try:
             model, tokenizer, formatter = load_model_tokenizer_formatter(
@@ -43,8 +42,6 @@ class SolutionGenerator:
             self.model = model
             self.tokenizer = tokenizer
             self.formatter = formatter
-
-            FastLanguageModel.for_inference(self.model)
 
             logger.info("Model loaded successfully")
 
@@ -64,8 +61,8 @@ class SolutionGenerator:
         Returns:
             Tuple of (generated_text, probability)
         """
-        if not self.model or not self.tokenizer:
-            raise RuntimeError("Model or tokenizer not initialized")
+
+        FastLanguageModel.for_inference(self.model)
 
         try:
             # Tokenize input
@@ -102,7 +99,7 @@ class SolutionGenerator:
             logger.error(f"Error generating response: {str(e)}")
             raise
 
-    def get_next_tokens_above_threshold(
+    def _get_next_tokens_above_threshold(
         self, prompt: str, log_probability_threshold: float
     ) -> Dict[str, float]:
         """Get probabilities for all possible next tokens
@@ -115,8 +112,6 @@ class SolutionGenerator:
         Returns:
             Dictionary mapping token text to log probability
         """
-        if not self.model or not self.tokenizer:
-            raise RuntimeError("Model or tokenizer not initialized")
 
         try:
             # Tokenize input
@@ -145,7 +140,7 @@ class SolutionGenerator:
             logger.error(f"Error getting next token distribution: {str(e)}")
             raise
 
-    def validate_response_is_grid(self, input: str, response: str) -> bool:
+    def _validate_response_is_grid(self, input: str, response: str) -> bool:
         try:
             self.formatter.parse_grid(response)
             return True
@@ -175,6 +170,7 @@ class SolutionGenerator:
         # Parallelize DFS and merge results - might be able to batch eval
         # Postpone decoding until the end (don't decode in the next_token function), maybe batch it?
 
+        FastLanguageModel.for_inference(self.model)
         log_response_prob_threshold = math.log(response_probability_threshold)
 
         # Note: this function uses mutation of variables outside its scope.
@@ -188,7 +184,7 @@ class SolutionGenerator:
             if depth >= max_tokens:
                 return
 
-            next_allowable_tokens = self.get_next_tokens_above_threshold(
+            next_allowable_tokens = self._get_next_tokens_above_threshold(
                 prompt=current_text,
                 log_probability_threshold=log_response_prob_threshold
                 - current_log_prob,
@@ -199,7 +195,7 @@ class SolutionGenerator:
                 new_log_prob = current_log_prob + log_prob
 
                 if token == self.tokenizer.eos_token:
-                    if self.validate_response_is_grid(new_text):
+                    if self._validate_response_is_grid(new_text):
                         candidates.append(
                             SolutionCandidate(
                                 text=new_text,
