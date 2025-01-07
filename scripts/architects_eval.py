@@ -23,15 +23,12 @@ class SolutionCandidate:
 
 
 class SolutionGenerator:
-    def __init__(self, peft_checkpoint_path: str, device: str = "cuda"):
+    def __init__(self, peft_checkpoint_path: str):
         """Initialize the inference module.
         Args:
             checkpoint_path: Path to the model checkpoint
-            device: Device to run inference on ("cuda" or "cpu")
         """
-        self.device = (
-            device if torch.cuda.is_available() and device == "cuda" else "cpu"
-        )
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = None
         self.tokenizer = None
         self.peft_checkpoint_path = peft_checkpoint_path
