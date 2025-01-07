@@ -11,7 +11,7 @@ from datasets import load_from_disk, Dataset
 import typing as ta
 from arc.external.architects import (
     InputMaskingDataCollator,
-    preprocess_model_tokenizer_formatter,
+    load_model_tokenizer_formatter,
 )
 
 
@@ -28,45 +28,13 @@ def load_and_process_dataset(
     return dataset  # type: ignore
 
 
-# from model_tools import (
-#     save_model_and_tokenizer,
-# )
-# from model_tools import load_peft_state, merge_peft_into_base
-
 # change this to take command line!
 fine_tuning_config = next(
     config for config in all_configs if config.name == "architects"
 )
 
-# for action in ["train", "merge"]:
-#     # continue if task already accomplished
-#     if action == "train" and os.path.exists(f"{save_model_path}-lora"):
-#         continue
-#     if action == "merge" and os.path.exists(f"{save_model_path}-merged"):
-#         continue
 
-# load base model & reduce embedding size
-model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name=fine_tuning_config.model_config.model,
-    dtype=fine_tuning_config.model_config.model_dtype,
-    load_in_4bit=fine_tuning_config.model_config.load_in_4bit,
-)
-
-model, tokenizer, formatter = preprocess_model_tokenizer_formatter(model, tokenizer)
-
-# create lora model
-model = FastLanguageModel.get_peft_model(
-    model=model,
-    target_modules=fine_tuning_config.lora_config.target_modules,
-    r=fine_tuning_config.lora_config.lora_rank,
-    lora_alpha=fine_tuning_config.lora_config.lora_alpha,
-    lora_dropout=fine_tuning_config.lora_config.lora_dropout,
-    bias=fine_tuning_config.lora_config.bias,
-    use_gradient_checkpointing="unsloth",
-    random_state=fine_tuning_config.lora_config.random_state,
-    use_rslora=fine_tuning_config.lora_config.use_rslora,
-    loftq_config=fine_tuning_config.lora_config.loftq_config,
-)
+model, tokenizer, formatter = load_model_tokenizer_formatter(fine_tuning_config)
 
 # Set up data
 
@@ -149,10 +117,4 @@ trainer = Trainer(
     ),
 )
 trainer_stats = unsloth_train(trainer)
-# save_model_and_tokenizer(f"{save_model_path}-lora", model, tokenizer)
-#
-# if action == "merge":
-#     # load peft weights and merge
-#     load_peft_state(model, f"{save_model_path}-lora")
-#     model = merge_peft_into_base(model)
-#     save_model_and_tokenizer(f"{save_model_path}-merged", model, tokenizer)
+# TODO(Sid): will this save the fully trained model or only the most recent checkpoint?
