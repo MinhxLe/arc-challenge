@@ -127,9 +127,11 @@ class SolutionGenerator:
             candidates_with_transformed_probabilities
         )
 
-        sorted_candidates = self._sort_candidates(candidates_with_scores)
+        sorted_candidates_with_scores = self._sort_candidates_with_scores(
+            candidates_with_scores
+        )
 
-        return self._choose_solutions(sorted_candidates, num_solutions)
+        return self._choose_solutions(sorted_candidates_with_scores, num_solutions)
 
     def generate_full_response(
         self, prompt: str, max_new_tokens: int = 10000
@@ -309,21 +311,18 @@ class SolutionGenerator:
             for candidate_with_tranfsorm_probs in candidates_with_transform_probs
         ]
 
-    def _sort_candidates(
+    def _sort_candidates_with_scores(
         self, candidates_with_scores: List[SolutionCandidateWithScore]
-    ) -> List[SolutionCandidate]:
-        return [
-            candidate_with_score.candidate
-            for candidate_with_score in sorted(
-                candidates_with_scores, key=lambda x: x.score, reverse=True
-            )
-        ]
+    ) -> List[SolutionCandidateWithScore]:
+        return sorted(candidates_with_scores, key=lambda x: x.score, reverse=True)
 
     def _choose_solutions(
-        self, sorted_candidates: List[SolutionCandidate], num_solutions: int = 1
+        self,
+        sorted_candidates: List[SolutionCandidateWithScore],
+        num_solutions: int = 1,
     ) -> List[Grid]:
         solutions_to_return = sorted_candidates[:num_solutions]
-        return [candidate.solution_grid for candidate in solutions_to_return]
+        return [solution.candidate.solution_grid for solution in solutions_to_return]
 
     def _get_response_log_probability(self, prompt: str, response: str) -> float:
         FastLanguageModel.for_inference(self.model)
@@ -386,25 +385,3 @@ class SolutionGenerator:
         except Exception as e:
             logger.error(f"Error getting next token distribution: {str(e)}")
             raise
-
-
-# Example usage:
-
-# from arc.datasets.seed import Datasets
-
-# sg = SolutionGenerator(
-#     "/shared/research/arc_challenge/runs/architects_copy_2024-12-26_keepers/checkpoint-30000/"
-# )
-
-# task = Task.from_dict(Datasets.arc_public_test.get_dataset()[0])
-
-# test_example = sg.formatter.format_task(
-#     task,
-#     include_test_output=False,
-# )
-
-# candidates = sg._get_candidate_responses(test_example, response_probability_threshold=0.01)
-# candidates[0].log_probability
-# sg._get_response_log_probability(prompt=test_example,response=candidates[0].solution_str)
-
-# sg.solve_task(task,2)
