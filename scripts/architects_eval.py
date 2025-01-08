@@ -1,4 +1,5 @@
 from arc.config import all_configs
+from arc.decorators import log_exceptions
 from arc.external.architects import load_model_tokenizer_formatter
 import torch
 import torch.nn.functional as F
@@ -26,31 +27,18 @@ class SolutionCandidate:
 
 
 class SolutionGenerator:
-    def __init__(self, peft_checkpoint_path: str):
+    def __init__(self, fine_tuning_config, ckpt_path: str):
         """Initialize the inference module.
         Args:
-            checkpoint_path: Path to the model checkpoint
+            ckpt_path: Path to the model checkpoint
         """
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.peft_checkpoint_path = peft_checkpoint_path
-        self._load_model()
-
-    def _load_model(self) -> None:
-        """Load the fine-tuned model from checkpoint."""
-        try:
-            model, tokenizer, formatter = load_model_tokenizer_formatter(
-                fine_tuning_config, self.peft_checkpoint_path
-            )
-
-            self.model = model
-            self.tokenizer = tokenizer
-            self.formatter = formatter
-
-            logger.info("Model loaded successfully")
-
-        except Exception as e:
-            logger.error(f"Error loading model: {str(e)}")
-            raise
+        model, tokenizer, formatter = load_model_tokenizer_formatter(
+            fine_tuning_config, ckpt_path
+        )
+        self.model = model
+        self.tokenizer = tokenizer
+        self.formatter = formatter
 
     def generate_full_response(
         self, prompt: str, max_new_tokens: int = 10000
@@ -67,41 +55,40 @@ class SolutionGenerator:
 
         FastLanguageModel.for_inference(self.model)
 
-        try:
-            # Tokenize input
-            inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
+        # Tokenize input
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
 
-            # Generate with logits
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=max_new_tokens,
-                    output_scores=True,
-                    return_dict_in_generate=True,
-                )
-
-            # Get generated text
-            input_length = inputs["input_ids"].shape[1]
-            response = self.tokenizer.decode(
-                outputs.sequences[0][input_length:], skip_special_tokens=True
+        # Generate with logits
+        with torch.no_grad():
+            outputs = self.model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                output_scores=True,
+                return_dict_in_generate=True,
             )
 
-            # Calculate sequence probability
-            sequence_probs = []
-            for logits in outputs.scores:
-                probs = F.softmax(logits, dim=-1)
-                # Get probability of selected token
-                token_prob = probs[0, torch.argmax(probs[0])].item()
-                sequence_probs.append(token_prob)
+        # Get generated text
+        input_length = inputs["input_ids"].shape[1]
 
-            total_probability = np.exp(np.sum(np.log(sequence_probs)))
+        response = self.tokenizer.decode(
+            outputs.sequences[0][input_length:], skip_special_tokens=True
+        )
 
-            return response, total_probability
+        # [TODO] we probably want to keep things in logprob space unless we actually need prob
+        # Calculate sequence probability
 
-        except Exception as e:
-            logger.error(f"Error generating response: {str(e)}")
-            raise
+        sequence_probs = []
+        for logits in outputs.scores:
+            probs = F.softmax(logits, dim=-1)
+            # Get probability of selected token
+            token_prob = probs[0, torch.argmax(probs[0])].item()
+            sequence_probs.append(token_prob)
 
+        # [TODO] is there a reason why we  changed to numpy instead of keeping things in torch
+        total_probability = np.exp(np.sum(np.log(sequence_probs)))
+        return response, total_probability
+
+    @log_exceptions("Error generating candidate response")
     def get_candidate_responses(
         self,
         prompt: str,
@@ -187,6 +174,7 @@ class SolutionGenerator:
             logger.error(f"Error generating candidate responses: {str(e)}")
             raise
 
+    @log_exceptions("Error getting next token distribution")
     def _get_next_tokens_above_threshold(
         self, prompt: str, log_probability_threshold: float
     ) -> Dict[str, float]:
@@ -201,44 +189,31 @@ class SolutionGenerator:
             Dictionary mapping token text to log probability
         """
 
-        try:
-            # Tokenize input
-            inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
+        # Tokenize input
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
 
-            # Get model output
-            with torch.no_grad():
-                outputs = self.model(**inputs)
-                logits = outputs.logits[:, -1, :]
-                log_probs = F.log_softmax(logits, dim=-1)[0]
-
-            indices_above_threshold = torch.where(
-                log_probs >= log_probability_threshold
-            )[0]
-
-            # Convert to dictionary of token: log_probability
-            token_log_prob_dict = {}
-            for idx in indices_above_threshold:
-                token_log_prob_dict[self.tokenizer.decode([idx])] = log_probs[
-                    idx
-                ].item()
-
-            return token_log_prob_dict
-
-        except Exception as e:
-            logger.error(f"Error getting next token distribution: {str(e)}")
-            raise
+        # Get model output
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+            logits = outputs.logits[0, -1, :]
+            log_probs = F.log_softmax(logits, dim=0)
+        indices_above_threshold = torch.where(log_probs >= log_probability_threshold)[0]
+        tokens = self.tokenizer.decode(indices_above_threshold)
+        return {token: p for (token, p) in zip(tokens, indices_above_threshold)}
 
 
-# from arc.core import Task
-# from arc.datasets.seed import Datasets
+from arc.core import Task
+from arc.datasets.seed import Datasets
 
-# sg = SolutionGenerator(
-#     "/shared/research/arc_challenge/runs/architects_copy_2024-12-26_keepers/checkpoint-30000/"
-# )
-
-# test_example = sg.formatter.format_task(
-#     Task.from_dict(Datasets.arc_public_test.get_dataset()[0]),
-#     include_test_output=False,
-# )
-
-# sg.get_candidate_responses(test_example, response_probability_threshold=0.01)
+sg = SolutionGenerator(
+    fine_tuning_config,
+    "/shared/research/arc_challenge/runs/architects_copy_2024-12-26_keepers/checkpoint-30000/",
+)
+#
+test_example = sg.formatter.format_task(
+    Task.from_dict(Datasets.arc_public_test.get_dataset()[0]),
+    include_test_output=False,
+)
+# [TODO] sg already has formatter in context. I think a better interface
+# would be to pass in Task in and let sg handle the formatting.
+sg.get_candidate_responses(test_example, response_probability_threshold=0.01)
