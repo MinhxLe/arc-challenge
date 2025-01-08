@@ -129,7 +129,7 @@ class SolutionGenerator:
 
         sorted_candidates = self._sort_candidates(candidates_with_scores)
 
-        self._return_solutions(sorted_candidates, num_solutions)
+        return self._choose_solutions(sorted_candidates, num_solutions)
 
     def generate_full_response(
         self, prompt: str, max_new_tokens: int = 10000
@@ -319,7 +319,7 @@ class SolutionGenerator:
             )
         ]
 
-    def _return_solutions(
+    def _choose_solutions(
         self, sorted_candidates: List[SolutionCandidate], num_solutions: int = 1
     ) -> List[Grid]:
         solutions_to_return = sorted_candidates[:num_solutions]
@@ -396,11 +396,15 @@ class SolutionGenerator:
 #     "/shared/research/arc_challenge/runs/architects_copy_2024-12-26_keepers/checkpoint-30000/"
 # )
 
+# task = Task.from_dict(Datasets.arc_public_test.get_dataset()[0])
+
 # test_example = sg.formatter.format_task(
-#     Task.from_dict(Datasets.arc_public_test.get_dataset()[0]),
+#     task,
 #     include_test_output=False,
 # )
 
 # candidates = sg._get_candidate_responses(test_example, response_probability_threshold=0.01)
 # candidates[0].log_probability
 # sg._get_response_log_probability(prompt=test_example,response=candidates[0].solution_str)
+
+# sg.solve_task(task,2)
