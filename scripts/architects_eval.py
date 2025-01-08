@@ -8,11 +8,60 @@ from loguru import logger
 from unsloth import FastLanguageModel
 import numpy as np
 import math
-from arc.core import Grid
+from arc.core import Task, Grid, Example
+from arc.transform import Rotate, Reflect, Compose, Transform
+import random
 
 fine_tuning_config = next(
     config for config in all_configs if config.name == "architects"
 )
+
+
+def _apply_transform_to_task(
+    task: Task,
+    transform: Transform,
+    input_only: bool = False,
+    shuffle_train_seed: int | None = None,
+) -> Task:
+    new_train = []
+    for example in task.train_set:
+        input_ = transform.apply(example.input_)
+        if input_only:
+            output = example.output
+        else:
+            output = transform.apply(example.output)
+        new_train.append(Example(input_=input_, output=output))
+
+    if shuffle_train_seed:
+        random.seed(shuffle_train_seed)
+        random.shuffle(new_train)
+
+    new_test = []
+    for example in task.test_set:
+        input_ = transform.apply(example.input_)
+        # TODO: handle the case of nonexistent test output (true test case)
+        if input_only:
+            output = example.output
+        else:
+            output = transform.apply(example.output)
+        new_test.append(Example(input_=input_, output=output))
+
+    return Task(id=None, train_set=new_train, test_set=new_test)
+
+
+# architects use 16
+# we could add some color permutations here
+TRANSFORMATIONS = [
+    Rotate(-1),
+    Rotate(-2),
+    Rotate(1),
+    Reflect(Reflect.Type.HORIZONTAL),
+    Reflect(Reflect.Type.VERTICAL),
+    Reflect(Reflect.Type.DIAGONAL),
+    Compose(
+        transforms=[Reflect(Reflect.Type.DIAGONAL), Reflect(Reflect.Type.HORIZONTAL)]
+    ),
+]
 
 
 @dataclass
@@ -23,6 +72,18 @@ class SolutionCandidate:
     solution_str: str
     solution_grid: Grid
     log_probability: float
+
+
+@dataclass
+class SolutionCandidateWithTransformLogProbs:
+    candidate: SolutionCandidate
+    transform_log_probabilities: List[float]
+
+
+@dataclass
+class SolutionCandidateWithScore:
+    candidate: SolutionCandidate
+    score: float
 
 
 class SolutionGenerator:
@@ -51,6 +112,24 @@ class SolutionGenerator:
         except Exception as e:
             logger.error(f"Error loading model: {str(e)}")
             raise
+
+    def solve_task(self, task: Task, num_solutions: int = 1):
+        candidates = self._get_candidate_responses(
+            prompt=self.formatter.format_task(task, include_test_output=False),
+            response_probability_threshold=0.05,
+        )
+
+        candidates_with_transformed_probabilities = (
+            self._get_candidate_transformation_log_probs(task, candidates)
+        )
+
+        candidates_with_scores = self._score_candidates(
+            candidates_with_transformed_probabilities
+        )
+
+        sorted_candidates = self._sort_candidates(candidates_with_scores)
+
+        self._return_solutions(sorted_candidates, num_solutions)
 
     def generate_full_response(
         self, prompt: str, max_new_tokens: int = 10000
@@ -102,7 +181,7 @@ class SolutionGenerator:
             logger.error(f"Error generating response: {str(e)}")
             raise
 
-    def get_candidate_responses(
+    def _get_candidate_responses(
         self,
         prompt: str,
         response_probability_threshold: float = 0.1,
@@ -187,6 +266,65 @@ class SolutionGenerator:
             logger.error(f"Error generating candidate responses: {str(e)}")
             raise
 
+    def _get_candidate_transformation_log_probs(
+        self, task: Task, candidates: List[SolutionCandidate]
+    ) -> List[SolutionCandidateWithTransformLogProbs]:
+        solutions_with_transform_probs = [
+            SolutionCandidateWithTransformLogProbs(
+                candidate=candidate,
+                transform_log_probabilities=[candidate.log_probability],
+            )
+            for candidate in candidates
+        ]
+        for seed, transformation in enumerate(TRANSFORMATIONS):
+            transformed_task = _apply_transform_to_task(
+                task=task, transform=transformation, shuffle_train_seed=seed
+            )
+            for solution_with_transform_prob in solutions_with_transform_probs:
+                transformed_solution = transformation.apply(
+                    solution_with_transform_prob.candidate.solution_grid
+                )
+                # TODO Don't access private method, and check on end formatting
+                # do both newline and eotoken show up in solutions?
+                log_prob = self._get_response_log_probability(
+                    prompt=self.formatter.format_task(
+                        transformed_task, include_test_output=False
+                    ),
+                    response=self.formatter._format_output(transformed_solution),
+                )
+                solution_with_transform_prob.transform_log_probabilities.append(
+                    log_prob
+                )
+        return solutions_with_transform_probs
+
+    def _score_candidates(
+        self,
+        candidates_with_transform_probs: List[SolutionCandidateWithTransformLogProbs],
+    ) -> List[SolutionCandidateWithScore]:
+        return [
+            SolutionCandidateWithScore(
+                candidate=candidate_with_tranfsorm_probs.candidate,
+                score=sum(candidate_with_tranfsorm_probs.transform_log_probabilities),
+            )
+            for candidate_with_tranfsorm_probs in candidates_with_transform_probs
+        ]
+
+    def _sort_candidates(
+        self, candidates_with_scores: List[SolutionCandidateWithScore]
+    ) -> List[SolutionCandidate]:
+        return [
+            candidate_with_score.candidate
+            for candidate_with_score in sorted(
+                candidates_with_scores, key=lambda x: x.score, reverse=True
+            )
+        ]
+
+    def _return_solutions(
+        self, sorted_candidates: List[SolutionCandidate], num_solutions: int = 1
+    ) -> List[Grid]:
+        solutions_to_return = sorted_candidates[:num_solutions]
+        return [candidate.solution_grid for candidate in solutions_to_return]
+
     def _get_response_log_probability(self, prompt: str, response: str) -> float:
         FastLanguageModel.for_inference(self.model)
 
@@ -252,7 +390,6 @@ class SolutionGenerator:
 
 # Example usage:
 
-# from arc.core import Task
 # from arc.datasets.seed import Datasets
 
 # sg = SolutionGenerator(
