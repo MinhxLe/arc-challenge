@@ -336,7 +336,7 @@ class SolutionGenerator:
             outputs = self.model(full_ids.to(self.device))
             logits = outputs.logits
 
-        response_logits = logits[:, (input_ids.shape[1] - 1) : -1, :]
+        response_logits = logits[:, input_ids.shape[1] :, :]
         probs = F.softmax(response_logits, dim=-1)
 
         response_token_log_probs = torch.gather(
