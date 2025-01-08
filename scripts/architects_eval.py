@@ -401,6 +401,6 @@ class SolutionGenerator:
 #     include_test_output=False,
 # )
 
-# candidates = sg.get_candidate_responses(test_example, response_probability_threshold=0.01)
+# candidates = sg._get_candidate_responses(test_example, response_probability_threshold=0.01)
 # candidates[0].log_probability
 # sg._get_response_log_probability(prompt=test_example,response=candidates[0].solution_str)
