@@ -4,7 +4,6 @@ from arc.tokenizers import Formatter
 from tokenizers import Tokenizer
 from trl import DataCollatorForCompletionOnlyLM
 import peft
-import typing as ta
 from unsloth import FastLanguageModel
 from arc.config import FineTuningConfig
 from loguru import logger
@@ -204,8 +203,8 @@ def get_and_fix_peft_weights(store):
 # Helper function to abstract away from of the architects' manipulations
 def load_model_tokenizer_formatter(
     fine_tuning_config: FineTuningConfig,
-    peft_trainer_checkpoint_dir: ta.Optional[str] = None,
-) -> FastLanguageModel:
+    peft_trainer_checkpoint_dir: str | None = None,
+):
     # load base model & reduce embedding size
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=fine_tuning_config.model_config.model,
@@ -236,6 +235,7 @@ def load_model_tokenizer_formatter(
         model = peft.PeftModel.from_pretrained(
             model=model,
             model_id=peft_trainer_checkpoint_dir,
+            # TODO device should not be hard coded
             device_map="cuda",
         )
 
