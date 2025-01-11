@@ -2,7 +2,7 @@ from arc.config import all_configs
 from arc.external.architects import load_model_tokenizer_formatter
 import torch
 import torch.nn.functional as F
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass
 from loguru import logger
 from unsloth import FastLanguageModel
@@ -10,7 +10,15 @@ import numpy as np
 import math
 from arc.core import Task, Grid, Example
 from arc.transform import Rotate, Reflect, Compose, Transform
+from arc.datasets.seed import Datasets
 import random
+
+from tqdm import tqdm
+import pickle as pkl
+
+EVAL_TMP_SAVE_FILE = (
+    "/shared/research/arc_challenge/runs/arc_public_eval_2025-01-10.pkl"
+)
 
 fine_tuning_config = next(
     config for config in all_configs if config.name == "architects"
@@ -85,6 +93,20 @@ class SolutionCandidateWithTransformLogProbs:
 class SolutionCandidateWithScore:
     candidate: SolutionCandidate
     score: float
+
+
+@dataclass
+class TaskEvaluation:
+    task: Task
+    solutions: List[Grid]
+    exception: Optional[Exception] = None
+
+    def success(self):
+        if self.exception is None:
+            for solution in self.solutions:
+                if np.array_equal(self.task.test_set[0].output, solution):
+                    return True
+        return False
 
 
 class SolutionGenerator:
@@ -394,3 +416,46 @@ class SolutionGenerator:
         except Exception as e:
             logger.error(f"Error getting next token distribution: {str(e)}")
             raise
+
+
+def run_evaluation():
+    sg = SolutionGenerator(
+        "/shared/research/arc_challenge/runs/architects_copy_2024-12-26_keepers/checkpoint-30000/"
+    )
+    eval_set = Datasets.arc_public_test.get_dataset()
+    task_evaluations = []
+
+    for dataset_task in tqdm(eval_set):
+        task = Task.from_dict(dataset_task)
+        try:
+            solutions = sg.solve_task(task, num_solutions=2)
+            task_evaluations.append(TaskEvaluation(task=task, solutions=solutions))
+        except Exception as e:
+            task_evaluations.append(
+                TaskEvaluation(
+                    task=task,
+                    solutions=[],
+                    exception=e,
+                )
+            )
+
+        with open(EVAL_TMP_SAVE_FILE, "wb") as file:
+            pkl.dump(task_evaluations, file)
+
+
+def evaluation_metrics():
+    with open(EVAL_TMP_SAVE_FILE, "rb") as file:
+        task_evaluations = pkl.load(file)
+
+    successes = []
+    for evaluation in task_evaluations:
+        successes.append(evaluation.success())
+
+    logger.info(f"Tasks evaluated: {len(task_evaluations)}")
+    logger.info(f"Tasks solved: {sum(successes)}")
+    logger.info(
+        f"Tasks with solution attempts: {sum([len(e.solutions)>0 for e in task_evaluations])}"
+    )
+    logger.info(
+        f"Tasks with exceptions: {sum([e.exception is not None for e in task_evaluations])}"
+    )
