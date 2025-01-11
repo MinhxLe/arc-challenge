@@ -11,6 +11,7 @@ import math
 from arc.core import Task, Grid, Example
 from arc.transform import Rotate, Reflect, Compose, Transform
 from arc.datasets.seed import Datasets
+from arc.datasets import transform as dst
 import random
 
 from tqdm import tqdm
@@ -422,7 +423,9 @@ def run_evaluation():
     sg = SolutionGenerator(
         "/shared/research/arc_challenge/runs/architects_copy_2024-12-26_keepers/checkpoint-30000/"
     )
-    eval_set = Datasets.arc_public_test.get_dataset()
+    eval_set = dst.concat(
+        Datasets.arc_public_train.get_dataset(), Datasets.arc_public_test.get_dataset()
+    )
     task_evaluations = []
 
     for dataset_task in tqdm(eval_set):
