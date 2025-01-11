@@ -72,6 +72,7 @@ class SolutionCandidate:
     solution_str: str
     solution_grid: Grid
     log_probability: float
+    token_log_probs: List[float]
 
 
 @dataclass
@@ -116,7 +117,7 @@ class SolutionGenerator:
     def solve_task(self, task: Task, num_solutions: int = 1):
         candidates = self._get_candidate_responses(
             prompt=self.formatter.format_task(task, include_test_output=False),
-            response_probability_threshold=0.05,
+            response_probability_threshold=0.10,
         )
 
         candidates_with_transformed_probabilities = (
@@ -215,6 +216,7 @@ class SolutionGenerator:
             current_log_prob: float,
             depth: int,
             candidates: List[SolutionCandidate],
+            token_log_probs: List[float],
         ) -> None:
             if depth >= max_tokens:
                 return
@@ -228,6 +230,10 @@ class SolutionGenerator:
             for token, log_prob in next_allowable_tokens.items():
                 new_text = current_text + token
                 new_log_prob = current_log_prob + log_prob
+                new_token_log_probs = token_log_probs + [log_prob]
+                assert depth + 1 == len(
+                    new_token_log_probs
+                ), f"depth: {depth}, length: {len(new_token_log_probs)}"
 
                 if token == self.tokenizer.eos_token:
                     try:
@@ -239,6 +245,7 @@ class SolutionGenerator:
                                     new_text
                                 ),
                                 log_probability=new_log_prob,
+                                token_log_probs=new_token_log_probs,
                             )
                         )
                     except ValueError:
@@ -251,6 +258,7 @@ class SolutionGenerator:
                         current_log_prob=new_log_prob,
                         depth=depth + 1,
                         candidates=candidates,
+                        token_log_probs=new_token_log_probs,
                     )
 
         try:
@@ -260,6 +268,7 @@ class SolutionGenerator:
                 current_log_prob=0.0,
                 depth=0,
                 candidates=candidates,
+                token_log_probs=[],
             )
 
             return candidates
@@ -337,13 +346,13 @@ class SolutionGenerator:
             logits = outputs.logits
 
         response_logits = logits[:, (input_ids.shape[1] - 1) : -1, :]
-        probs = F.softmax(response_logits, dim=-1)
+        log_probs = F.log_softmax(response_logits, dim=-1)
 
         response_token_log_probs = torch.gather(
-            probs, 2, response_ids.to(self.device).unsqueeze(-1)
+            log_probs, 2, response_ids.to(self.device).unsqueeze(-1)
         ).squeeze(-1)
 
-        return torch.sum(torch.log(response_token_log_probs)).item()
+        return torch.sum(response_token_log_probs).item()
 
     def _get_next_tokens_above_threshold(
         self, prompt: str, log_probability_threshold: float
