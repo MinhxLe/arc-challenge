@@ -9,7 +9,7 @@ from unsloth import FastLanguageModel
 import numpy as np
 import math
 from arc.core import Task, Grid, Example
-from arc.transform import Rotate, Reflect, Compose, Transform
+from arc.transform import Identity, Rotate, Reflect, Compose, Transform
 from arc.datasets.seed import Datasets
 from arc.datasets import transform as dst
 import random
@@ -24,6 +24,14 @@ EVAL_TMP_SAVE_FILE = (
 fine_tuning_config = next(
     config for config in all_configs if config.name == "architects"
 )
+
+
+def _dedupe_np_arrays(arr_list: list[np.ndarray]):
+    result = []
+    for arr in arr_list:
+        if not any(np.array_equal(arr, x) for x in result):
+            result.append(arr)
+    return result
 
 
 def _apply_transform_to_task(
@@ -60,7 +68,8 @@ def _apply_transform_to_task(
 
 # architects use 16
 # we could add some color permutations here
-TRANSFORMATIONS = [
+TRANSFORMS: List[Transform] = [
+    Identity(),
     Rotate(-1),
     Rotate(-2),
     Rotate(1),
@@ -71,29 +80,6 @@ TRANSFORMATIONS = [
         transforms=[Reflect(Reflect.Type.DIAGONAL), Reflect(Reflect.Type.HORIZONTAL)]
     ),
 ]
-
-
-@dataclass
-class SolutionCandidate:
-    """Data class to store candidate responses and their log-probabilities."""
-
-    full_text: str
-    solution_str: str
-    solution_grid: Grid
-    log_probability: float
-    token_log_probs: List[float]
-
-
-@dataclass
-class SolutionCandidateWithTransformLogProbs:
-    candidate: SolutionCandidate
-    transform_log_probabilities: List[float]
-
-
-@dataclass
-class SolutionCandidateWithScore:
-    candidate: SolutionCandidate
-    score: float
 
 
 @dataclass
@@ -137,25 +123,28 @@ class SolutionGenerator:
             logger.error(f"Error loading model: {str(e)}")
             raise
 
-    def solve_task(self, task: Task, num_solutions: int = 1):
-        candidates = self._get_candidate_responses(
-            prompt=self.formatter.format_task(task, include_test_output=False),
+    def _score_candidate(self, task: Task, candidate: Grid) -> float:
+        transform_log_probs = []
+        for transform in TRANSFORMS:
+            transformed_task = _apply_transform_to_task(task, transform)
+            transformed_candidate = transform.apply(candidate)
+            transform_log_probs.append(
+                self._calculate_candidate_log_prob(
+                    transformed_task, transformed_candidate
+                )
+            )
+        return sum(transform_log_probs)
+
+    def solve_task(self, task: Task, num_solutions: int = 1) -> list[Grid]:
+        candidates = self._get_candidates(
+            task=task,
             response_probability_threshold=0.10,
         )
-
-        candidates_with_transformed_probabilities = (
-            self._get_candidate_transformation_log_probs(task, candidates)
-        )
-
-        candidates_with_scores = self._score_candidates(
-            candidates_with_transformed_probabilities
-        )
-
-        sorted_candidates_with_scores = self._sort_candidates_with_scores(
-            candidates_with_scores
-        )
-
-        return self._choose_solutions(sorted_candidates_with_scores, num_solutions)
+        # scoring candidates
+        scores = [self._score_candidate(task, c) for c in candidates]
+        candidate_and_scores = list(zip(candidates, scores))
+        candidate_and_scores.sort(reverse=True, key=lambda x: x[1])
+        return [c[0] for c in candidate_and_scores[:num_solutions]]
 
     def generate_full_response(
         self, prompt: str, max_new_tokens: int = 10000
@@ -207,16 +196,16 @@ class SolutionGenerator:
             logger.error(f"Error generating response: {str(e)}")
             raise
 
-    def _get_candidate_responses(
+    def _get_candidates(
         self,
-        prompt: str,
+        task: Task,
         response_probability_threshold: float = 0.1,
         max_tokens: int = 10000,
-    ) -> List[SolutionCandidate]:
+    ) -> List[Grid]:
         """Generate candidate responses using depth-first search with probability threshold.
 
         Args:
-            prompt: Input prompt text
+            task: Task
             response_probability_threshold: Minimum cumulative probability threshold
             max_tokens: Maximum length of response
 
@@ -238,7 +227,7 @@ class SolutionGenerator:
             current_text: str,
             current_log_prob: float,
             depth: int,
-            candidates: List[SolutionCandidate],
+            candidates: List[Grid],
             token_log_probs: List[float],
         ) -> None:
             if depth >= max_tokens:
@@ -261,15 +250,7 @@ class SolutionGenerator:
                 if token == self.tokenizer.eos_token:
                     try:
                         candidates.append(
-                            SolutionCandidate(
-                                full_text=new_text,
-                                solution_str=new_text[len(prompt) :],
-                                solution_grid=self.formatter.parse_test_output_grid(
-                                    new_text
-                                ),
-                                log_probability=new_log_prob,
-                                token_log_probs=new_token_log_probs,
-                            )
+                            self.formatter.parse_test_output_grid(new_text)
                         )
                     except ValueError:
                         # assuming this is due to malformed grid
@@ -285,76 +266,33 @@ class SolutionGenerator:
                     )
 
         try:
-            candidates = []
-            dfs(
-                current_text=prompt,
-                current_log_prob=0.0,
-                depth=0,
-                candidates=candidates,
-                token_log_probs=[],
-            )
-
-            return candidates
+            all_candidates = []
+            for transform in TRANSFORMS:
+                candidates = []
+                transformed_task = _apply_transform_to_task(task, transform)
+                prompt = self.formatter.format_task(
+                    transformed_task, include_test_output=False
+                )
+                dfs(
+                    current_text=prompt,
+                    current_log_prob=0.0,
+                    depth=0,
+                    candidates=candidates,
+                    token_log_probs=[],
+                )
+                all_candidates.extend([transform.inverse.apply(c) for c in candidates])
+            # [TODO] dedupe candidate
+            return _dedupe_np_arrays(all_candidates)
 
         except Exception as e:
             logger.error(f"Error generating candidate responses: {str(e)}")
             raise
 
-    def _get_candidate_transformation_log_probs(
-        self, task: Task, candidates: List[SolutionCandidate]
-    ) -> List[SolutionCandidateWithTransformLogProbs]:
-        solutions_with_transform_probs = [
-            SolutionCandidateWithTransformLogProbs(
-                candidate=candidate,
-                transform_log_probabilities=[candidate.log_probability],
-            )
-            for candidate in candidates
-        ]
-        for seed, transformation in enumerate(TRANSFORMATIONS):
-            transformed_task = _apply_transform_to_task(
-                task=task, transform=transformation, shuffle_train_seed=seed
-            )
-            for solution_with_transform_prob in solutions_with_transform_probs:
-                transformed_solution = transformation.apply(
-                    solution_with_transform_prob.candidate.solution_grid
-                )
-                # TODO Don't access private method, and check on end formatting
-                # do both newline and eotoken show up in solutions?
-                log_prob = self._get_response_log_probability(
-                    prompt=self.formatter.format_task(
-                        transformed_task, include_test_output=False
-                    ),
-                    response=self.formatter._format_output(transformed_solution),
-                )
-                solution_with_transform_prob.transform_log_probabilities.append(
-                    log_prob
-                )
-        return solutions_with_transform_probs
-
-    def _score_candidates(
-        self,
-        candidates_with_transform_probs: List[SolutionCandidateWithTransformLogProbs],
-    ) -> List[SolutionCandidateWithScore]:
-        return [
-            SolutionCandidateWithScore(
-                candidate=candidate_with_tranfsorm_probs.candidate,
-                score=sum(candidate_with_tranfsorm_probs.transform_log_probabilities),
-            )
-            for candidate_with_tranfsorm_probs in candidates_with_transform_probs
-        ]
-
-    def _sort_candidates_with_scores(
-        self, candidates_with_scores: List[SolutionCandidateWithScore]
-    ) -> List[SolutionCandidateWithScore]:
-        return sorted(candidates_with_scores, key=lambda x: x.score, reverse=True)
-
-    def _choose_solutions(
-        self,
-        sorted_candidates: List[SolutionCandidateWithScore],
-        num_solutions: int = 1,
-    ) -> List[Grid]:
-        solutions_to_return = sorted_candidates[:num_solutions]
-        return [solution.candidate.solution_grid for solution in solutions_to_return]
+    def _calculate_candidate_log_prob(self, task: Task, candidate: Grid) -> float:
+        return self._get_response_log_probability(
+            prompt=self.formatter.format_task(task, include_test_output=False),
+            response=self.formatter._format_output(candidate),
+        )
 
     def _get_response_log_probability(self, prompt: str, response: str) -> float:
         FastLanguageModel.for_inference(self.model)
@@ -417,6 +355,14 @@ class SolutionGenerator:
         except Exception as e:
             logger.error(f"Error getting next token distribution: {str(e)}")
             raise
+
+
+def run_test():
+    sg = SolutionGenerator(
+        "/shared/research/arc_challenge/runs/architects_copy_2024-12-26_keepers/checkpoint-30000/"
+    )
+    task = Task.from_dict(Datasets.arc_public_train.get_dataset()[0])
+    return sg.solve_task(task, num_solutions=10)
 
 
 def run_evaluation():
