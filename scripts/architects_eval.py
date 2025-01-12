@@ -2,7 +2,7 @@ from arc.config import all_configs
 from arc.external.architects import load_model_tokenizer_formatter
 import torch
 import torch.nn.functional as F
-from typing import List, Tuple, Dict, Optional
+from typing import List, Dict, Optional
 from dataclasses import dataclass
 from loguru import logger
 from unsloth import FastLanguageModel
@@ -138,7 +138,7 @@ class SolutionGenerator:
     def solve_task(self, task: Task, num_solutions: int = 1) -> list[Grid]:
         candidates = self._get_candidates(
             task=task,
-            response_probability_threshold=0.10,
+            response_log_probability_threshold=math.log(0.10),
         )
         # scoring candidates
         scores = [self._score_candidate(task, c) for c in candidates]
@@ -146,62 +146,17 @@ class SolutionGenerator:
         candidate_and_scores.sort(reverse=True, key=lambda x: x[1])
         return [c[0] for c in candidate_and_scores[:num_solutions]]
 
-    def generate_full_response(
-        self, prompt: str, max_new_tokens: int = 10000
-    ) -> Tuple[str, float]:
-        """Generate a complete response for the given prompt with its probability.
-
-        Args:
-            prompt: Input prompt text
-            max_length: Maximum length of the generated response
-
-        Returns:
-            Tuple of (generated_text, probability)
-        """
-
-        FastLanguageModel.for_inference(self.model)
-
-        # Tokenize input
-        inputs = self.tokenizer(prompt, return_tensors="pt")
-
-        # Generate with logits
-        with torch.no_grad():
-            outputs = self.model.generate(
-                **inputs,
-                max_new_tokens=max_new_tokens,
-                output_scores=True,
-                return_dict_in_generate=True,
-            )
-
-        # Get generated text
-        input_length = inputs["input_ids"].shape[1]
-        response = self.tokenizer.decode(
-            outputs.sequences[0][input_length:], skip_special_tokens=True
-        )
-
-        # Calculate sequence probability
-        sequence_probs = []
-        for logits in outputs.scores:
-            probs = F.softmax(logits, dim=-1)
-            # Get probability of selected token
-            token_prob = probs[0, torch.argmax(probs[0])].item()
-            sequence_probs.append(token_prob)
-
-        total_probability = np.exp(np.sum(np.log(sequence_probs)))
-
-        return response, total_probability
-
     def _get_candidates(
         self,
         task: Task,
-        response_probability_threshold: float = 0.1,
+        response_log_probability_threshold: float = math.log(0.1),
         max_tokens: int = 10000,
     ) -> List[Grid]:
-        """Generate candidate responses using depth-first search with probability threshold.
+        """Generate candidate responses using depth-first search with log probability threshold.
 
         Args:
             task: Task
-            response_probability_threshold: Minimum cumulative probability threshold
+            response_log_probability_threshold: Minimum cumulative log probability threshold
             max_tokens: Maximum length of response
 
         Returns:
@@ -214,7 +169,6 @@ class SolutionGenerator:
         # Postpone decoding until the end (don't encode/decode in the next_token function) - but need to also handle attention mask
 
         FastLanguageModel.for_inference(self.model)
-        log_response_prob_threshold = math.log(response_probability_threshold)
 
         # Note: this function uses mutation of variables outside its scope.
         # We could change this to return candidates instead... I think.
@@ -230,7 +184,7 @@ class SolutionGenerator:
 
             next_allowable_tokens = self._get_next_tokens_above_threshold(
                 prompt=current_text,
-                log_probability_threshold=log_response_prob_threshold
+                log_probability_threshold=response_log_probability_threshold
                 - current_log_prob,
             )
 
@@ -275,7 +229,6 @@ class SolutionGenerator:
                 token_log_probs=[],
             )
             all_candidates.extend([transform.inverse.apply(c) for c in candidates])
-        # [TODO] dedupe candidate
         return _dedupe_np_arrays(all_candidates)
 
     def _calculate_candidate_log_prob(self, task: Task, candidate: Grid) -> float:
@@ -308,12 +261,12 @@ class SolutionGenerator:
     def _get_next_tokens_above_threshold(
         self, prompt: str, log_probability_threshold: float
     ) -> Dict[str, float]:
-        """Get probabilities for all possible next tokens
-           with probability of occurrence >= threshold.
+        """Get log probabilities for all possible next tokens
+           with log probability of occurrence >= threshold.
 
         Args:
             prompt: Input prompt text
-            log_probability_threshold: minimum acceptable probability
+            log_probability_threshold: minimum acceptable log probability
 
         Returns:
             Dictionary mapping token text to log probability
