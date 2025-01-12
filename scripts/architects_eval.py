@@ -21,6 +21,11 @@ EVAL_TMP_SAVE_FILE = (
     "/shared/research/arc_challenge/runs/arc_public_eval_2025-01-10.pkl"
 )
 
+torch.set_default_device(
+    "cuda"
+) if torch.cuda.is_available() else torch.set_default_device("cpu")
+
+
 fine_tuning_config = next(
     config for config in all_configs if config.name == "architects"
 )
@@ -102,7 +107,6 @@ class SolutionGenerator:
         Args:
             checkpoint_path: Path to the model checkpoint
         """
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.peft_checkpoint_path = peft_checkpoint_path
         self._load_model()
 
@@ -163,7 +167,7 @@ class SolutionGenerator:
 
         try:
             # Tokenize input
-            inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
+            inputs = self.tokenizer(prompt, return_tensors="pt")
 
             # Generate with logits
             with torch.no_grad():
@@ -303,14 +307,14 @@ class SolutionGenerator:
         response_ids = full_ids[:, input_ids.shape[1] :]
 
         with torch.no_grad():
-            outputs = self.model(full_ids.to(self.device))
+            outputs = self.model(full_ids)
             logits = outputs.logits
 
         response_logits = logits[:, (input_ids.shape[1] - 1) : -1, :]
         log_probs = F.log_softmax(response_logits, dim=-1)
 
         response_token_log_probs = torch.gather(
-            log_probs, 2, response_ids.to(self.device).unsqueeze(-1)
+            log_probs, 2, response_ids.unsqueeze(-1)
         ).squeeze(-1)
 
         return torch.sum(response_token_log_probs).item()
@@ -331,7 +335,7 @@ class SolutionGenerator:
 
         try:
             # Tokenize input
-            inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
+            inputs = self.tokenizer(prompt, return_tensors="pt")
 
             # Get model output
             with torch.no_grad():
