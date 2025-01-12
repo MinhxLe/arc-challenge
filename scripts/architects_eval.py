@@ -112,20 +112,16 @@ class SolutionGenerator:
 
     def _load_model(self) -> None:
         """Load the fine-tuned model from checkpoint."""
-        try:
-            model, tokenizer, formatter = load_model_tokenizer_formatter(
-                fine_tuning_config, self.peft_checkpoint_path
-            )
 
-            self.model = model
-            self.tokenizer = tokenizer
-            self.formatter = formatter
+        model, tokenizer, formatter = load_model_tokenizer_formatter(
+            fine_tuning_config, self.peft_checkpoint_path
+        )
 
-            logger.info("Model loaded successfully")
+        self.model = model
+        self.tokenizer = tokenizer
+        self.formatter = formatter
 
-        except Exception as e:
-            logger.error(f"Error loading model: {str(e)}")
-            raise
+        logger.info("Model loaded successfully")
 
     def _score_candidate(self, task: Task, candidate: Grid) -> float:
         transform_log_probs = []
@@ -165,40 +161,35 @@ class SolutionGenerator:
 
         FastLanguageModel.for_inference(self.model)
 
-        try:
-            # Tokenize input
-            inputs = self.tokenizer(prompt, return_tensors="pt")
+        # Tokenize input
+        inputs = self.tokenizer(prompt, return_tensors="pt")
 
-            # Generate with logits
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=max_new_tokens,
-                    output_scores=True,
-                    return_dict_in_generate=True,
-                )
-
-            # Get generated text
-            input_length = inputs["input_ids"].shape[1]
-            response = self.tokenizer.decode(
-                outputs.sequences[0][input_length:], skip_special_tokens=True
+        # Generate with logits
+        with torch.no_grad():
+            outputs = self.model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                output_scores=True,
+                return_dict_in_generate=True,
             )
 
-            # Calculate sequence probability
-            sequence_probs = []
-            for logits in outputs.scores:
-                probs = F.softmax(logits, dim=-1)
-                # Get probability of selected token
-                token_prob = probs[0, torch.argmax(probs[0])].item()
-                sequence_probs.append(token_prob)
+        # Get generated text
+        input_length = inputs["input_ids"].shape[1]
+        response = self.tokenizer.decode(
+            outputs.sequences[0][input_length:], skip_special_tokens=True
+        )
 
-            total_probability = np.exp(np.sum(np.log(sequence_probs)))
+        # Calculate sequence probability
+        sequence_probs = []
+        for logits in outputs.scores:
+            probs = F.softmax(logits, dim=-1)
+            # Get probability of selected token
+            token_prob = probs[0, torch.argmax(probs[0])].item()
+            sequence_probs.append(token_prob)
 
-            return response, total_probability
+        total_probability = np.exp(np.sum(np.log(sequence_probs)))
 
-        except Exception as e:
-            logger.error(f"Error generating response: {str(e)}")
-            raise
+        return response, total_probability
 
     def _get_candidates(
         self,
@@ -269,28 +260,23 @@ class SolutionGenerator:
                         token_log_probs=new_token_log_probs,
                     )
 
-        try:
-            all_candidates = []
-            for transform in TRANSFORMS:
-                candidates = []
-                transformed_task = _apply_transform_to_task(task, transform)
-                prompt = self.formatter.format_task(
-                    transformed_task, include_test_output=False
-                )
-                dfs(
-                    current_text=prompt,
-                    current_log_prob=0.0,
-                    depth=0,
-                    candidates=candidates,
-                    token_log_probs=[],
-                )
-                all_candidates.extend([transform.inverse.apply(c) for c in candidates])
-            # [TODO] dedupe candidate
-            return _dedupe_np_arrays(all_candidates)
-
-        except Exception as e:
-            logger.error(f"Error generating candidate responses: {str(e)}")
-            raise
+        all_candidates = []
+        for transform in TRANSFORMS:
+            candidates = []
+            transformed_task = _apply_transform_to_task(task, transform)
+            prompt = self.formatter.format_task(
+                transformed_task, include_test_output=False
+            )
+            dfs(
+                current_text=prompt,
+                current_log_prob=0.0,
+                depth=0,
+                candidates=candidates,
+                token_log_probs=[],
+            )
+            all_candidates.extend([transform.inverse.apply(c) for c in candidates])
+        # [TODO] dedupe candidate
+        return _dedupe_np_arrays(all_candidates)
 
     def _calculate_candidate_log_prob(self, task: Task, candidate: Grid) -> float:
         return self._get_response_log_probability(
@@ -333,32 +319,23 @@ class SolutionGenerator:
             Dictionary mapping token text to log probability
         """
 
-        try:
-            # Tokenize input
-            inputs = self.tokenizer(prompt, return_tensors="pt")
+        # Tokenize input
+        inputs = self.tokenizer(prompt, return_tensors="pt")
 
-            # Get model output
-            with torch.no_grad():
-                outputs = self.model(**inputs)
-                logits = outputs.logits[:, -1, :]
-                log_probs = F.log_softmax(logits, dim=-1)[0]
+        # Get model output
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+            logits = outputs.logits[:, -1, :]
+            log_probs = F.log_softmax(logits, dim=-1)[0]
 
-            indices_above_threshold = torch.where(
-                log_probs >= log_probability_threshold
-            )[0]
+        indices_above_threshold = torch.where(log_probs >= log_probability_threshold)[0]
 
-            # Convert to dictionary of token: log_probability
-            token_log_prob_dict = {}
-            for idx in indices_above_threshold:
-                token_log_prob_dict[self.tokenizer.decode([idx])] = log_probs[
-                    idx
-                ].item()
+        # Convert to dictionary of token: log_probability
+        token_log_prob_dict = {}
+        for idx in indices_above_threshold:
+            token_log_prob_dict[self.tokenizer.decode([idx])] = log_probs[idx].item()
 
-            return token_log_prob_dict
-
-        except Exception as e:
-            logger.error(f"Error getting next token distribution: {str(e)}")
-            raise
+        return token_log_prob_dict
 
 
 def run_test():
