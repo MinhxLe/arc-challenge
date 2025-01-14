@@ -138,7 +138,7 @@ class SolutionGenerator:
     def solve_task(self, task: Task, num_solutions: int = 1) -> list[Grid]:
         candidates = self._get_candidates(
             task=task,
-            response_log_probability_threshold=math.log(0.10),
+            response_log_prob_threshold=math.log(0.10),
         )
         # scoring candidates
         scores = [self._score_candidate(task, c) for c in candidates]
@@ -149,14 +149,14 @@ class SolutionGenerator:
     def _get_candidates(
         self,
         task: Task,
-        response_log_probability_threshold: float = math.log(0.1),
+        response_log_prob_threshold: float = math.log(0.1),
         max_tokens: int = 10000,
     ) -> List[Grid]:
         """Generate candidate responses using depth-first search with log probability threshold.
 
         Args:
             task: Task
-            response_log_probability_threshold: Minimum cumulative log probability threshold
+            response_log_prob_threshold: Minimum cumulative log probability threshold
             max_tokens: Maximum length of response
 
         Returns:
@@ -184,8 +184,7 @@ class SolutionGenerator:
 
             next_allowable_tokens = self._get_next_tokens_above_threshold(
                 prompt=current_text,
-                log_probability_threshold=response_log_probability_threshold
-                - current_log_prob,
+                log_prob_threshold=response_log_prob_threshold - current_log_prob,
             )
 
             for token, log_prob in next_allowable_tokens.items():
@@ -232,12 +231,12 @@ class SolutionGenerator:
         return _dedupe_np_arrays(all_candidates)
 
     def _calculate_candidate_log_prob(self, task: Task, candidate: Grid) -> float:
-        return self._get_response_log_probability(
+        return self._get_response_log_prob(
             prompt=self.formatter.format_task(task, include_test_output=False),
             response=self.formatter._format_output(candidate),
         )
 
-    def _get_response_log_probability(self, prompt: str, response: str) -> float:
+    def _get_response_log_prob(self, prompt: str, response: str) -> float:
         FastLanguageModel.for_inference(self.model)
 
         full_text = f"{prompt}{response}"
@@ -259,14 +258,14 @@ class SolutionGenerator:
         return torch.sum(response_token_log_probs).item()
 
     def _get_next_tokens_above_threshold(
-        self, prompt: str, log_probability_threshold: float
+        self, prompt: str, log_prob_threshold: float
     ) -> Dict[str, float]:
         """Get log probabilities for all possible next tokens
            with log probability of occurrence >= threshold.
 
         Args:
             prompt: Input prompt text
-            log_probability_threshold: minimum acceptable log probability
+            log_prob_threshold: minimum acceptable log probability
 
         Returns:
             Dictionary mapping token text to log probability
@@ -281,9 +280,9 @@ class SolutionGenerator:
             logits = outputs.logits[:, -1, :]
             log_probs = F.log_softmax(logits, dim=-1)[0]
 
-        indices_above_threshold = torch.where(log_probs >= log_probability_threshold)[0]
+        indices_above_threshold = torch.where(log_probs >= log_prob_threshold)[0]
 
-        # Convert to dictionary of token: log_probability
+        # Convert to dictionary of token: log_prob
         token_log_prob_dict = {}
         for idx in indices_above_threshold:
             token_log_prob_dict[self.tokenizer.decode([idx])] = log_probs[idx].item()
