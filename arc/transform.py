@@ -19,6 +19,16 @@ class Transform(abc.ABC):
 
 
 @dataclass
+class Identity(Transform):
+    def apply(self, grid: Grid) -> Grid:
+        return grid
+
+    @property
+    def inverse(self) -> "Transform":
+        return Identity()
+
+
+@dataclass
 class Rotate(Transform):
     """
     90 degree counterclockwise rotation
