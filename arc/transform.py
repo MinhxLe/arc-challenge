@@ -4,7 +4,7 @@ from enum import Enum, auto
 import numpy as np
 import random
 
-from arc.core import Color, Grid
+from arc.core import Color, Grid, Task
 
 
 class Transform(abc.ABC):
@@ -114,3 +114,23 @@ class Compose(Transform):
         # [IMPORANT] this is not 100% correct because this assumes that transforms
         # are commutative and D8 is not a commutative group.
         return Compose(list(reversed(self.transforms)))
+
+
+def generate_train_only_tasks(task: Task) -> list[Task]:
+    original_train_len = len(task.train_set)
+
+    if original_train_len <= 1:
+        return []
+
+    train_only_tasks = []
+    # TODO: Should we generate only one new task to avoid the test
+    # showing up in train context in other permutations?
+    # TODO: Should we shuffle train order?
+    for idx in range(original_train_len):
+        new_task_train_copy = task.train_set.copy()
+        new_test = [new_task_train_copy.pop(idx)]
+        train_only_tasks.append(
+            Task(id=None, train_set=new_task_train_copy, test_set=new_test)
+        )
+
+    return train_only_tasks
