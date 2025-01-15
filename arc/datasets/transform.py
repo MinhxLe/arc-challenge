@@ -65,3 +65,28 @@ def apply_transform(
         return row
 
     return map_dataset(dataset, apply_transform)
+
+
+def generate_ttt_dataset(dataset: Dataset) -> Dataset:
+    def create_ttt_tasks(row):
+        if len(row["train"]) <= 1:
+            return []
+
+        ttt_tasks = []
+        # TODO: Should we generate only one new task to avoid the test
+        # showing up in train context in other permutations?
+        # TODO: Should we shuffle train order?
+        for idx in range(len(row["train"])):
+            new_task_train_copy = row["train"].copy()
+            new_test = [new_task_train_copy.pop(idx)]
+            ttt_tasks.append({"train": new_task_train_copy, "test": new_test})
+
+        return {"tasks": ttt_tasks}
+
+    return Dataset.from_list(
+        [
+            task
+            for ttt_tasks in map_dataset(dataset, create_ttt_tasks)["tasks"]
+            for task in ttt_tasks
+        ]
+    )
