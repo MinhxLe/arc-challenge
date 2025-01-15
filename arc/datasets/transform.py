@@ -81,12 +81,12 @@ def generate_ttt_dataset(dataset: Dataset) -> Dataset:
             new_test = [new_task_train_copy.pop(idx)]
             ttt_tasks.append({"train": new_task_train_copy, "test": new_test})
 
-        return {"tasks": ttt_tasks}
+        return {"ttt_tasks": ttt_tasks}
 
     return Dataset.from_list(
         [
             task
-            for ttt_tasks in map_dataset(dataset, create_ttt_tasks)["tasks"]
+            for ttt_tasks in map_dataset(dataset, create_ttt_tasks)["ttt_tasks"]
             for task in ttt_tasks
         ]
     )
