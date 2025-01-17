@@ -8,6 +8,7 @@ import typing as ta
 from unsloth import FastLanguageModel
 from arc.config import FineTuningConfig
 from loguru import logger
+import os
 
 #### copied from architects, mutation everywhere
 
@@ -261,3 +262,13 @@ def get_peft_model_with_lora(
         use_rslora=fine_tuning_config.lora_config.use_rslora,
         loftq_config=fine_tuning_config.lora_config.loftq_config,
     )
+
+
+def save_model_and_tokenizer(store_path, model, tokenizer):
+    model.save_pretrained(store_path)
+    tokenizer.save_pretrained(store_path)
+    to_delete = os.path.join(
+        store_path, "tokenizer.model"
+    )  # delete file, as it interferes with token removal
+    if os.path.isfile(to_delete):
+        os.remove(to_delete)

@@ -2,13 +2,17 @@ from arc.config import all_configs
 from arc.external.architects import (
     load_model_tokenizer_formatter,
     get_peft_model_with_lora,
+    InputMaskingDataCollator,
+    save_model_and_tokenizer,
 )
 import torch
 import torch.nn.functional as F
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 from loguru import logger
-from unsloth import FastLanguageModel
+from unsloth import FastLanguageModel, unsloth_train, is_bfloat16_supported
+from unsloth import UnslothTrainer as Trainer
+from unsloth import UnslothTrainingArguments as TrainingArguments
 import numpy as np
 import math
 from arc.core import Task, Grid, Example
@@ -28,6 +32,8 @@ import random
 
 from tqdm import tqdm
 import pickle as pkl
+from arc import settings
+from datetime import datetime
 
 EVAL_TMP_SAVE_FILE = (
     "/shared/research/arc_challenge/runs/arc_public_eval_2025-01-10.pkl"
@@ -174,6 +180,57 @@ class SolutionGenerator:
             )
             .map(format_row, num_proc=24)
             .filter(not_too_long)
+        )
+
+    def _run_ttt(self, dataset: Dataset) -> None:
+        ttt_dataset = self._prepare_ttt_dataset(dataset)
+        self._prepare_model_for_finetuning()
+
+        run_name = "architects_ttt"
+        save_path = f"{(settings.TEMP_ROOT_DIR)}/runs/{run_name}/{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+        trainer = Trainer(
+            model=self.model,
+            tokenizer=self.tokenizer,
+            train_dataset=ttt_dataset,
+            # eval_dataset=eval_dataset,
+            dataset_text_field=fine_tuning_config.sftt_config.dataset_text_field,
+            max_seq_length=fine_tuning_config.sftt_config.max_seq_length,
+            data_collator=InputMaskingDataCollator(
+                instruction_template=self.formatter.input_head_token,
+                response_template=self.formatter.output_head_token,
+                mlm=False,
+                tokenizer=self.tokenizer,
+                mask_first_n_examples=0,
+            ),
+            args=TrainingArguments(
+                run_name=run_name,
+                per_device_train_batch_size=4,
+                # per_device_eval_batch_size=fine_tuning_config.sftt_config.per_device_eval_batch_size,
+                gradient_accumulation_steps=1,
+                warmup_ratio=0.25,
+                num_train_epochs=1,
+                learning_rate=1e-4,
+                embedding_learning_rate=1e-5,
+                # eval_strategy="steps",
+                fp16=not is_bfloat16_supported(),
+                bf16=is_bfloat16_supported(),
+                logging_steps=500,
+                optim="adamw_8bit",
+                weight_decay=0.00,
+                lr_scheduler_type="cosine",
+                seed=42,
+                output_dir=save_path,
+                resume_from_checkpoint=True,
+                save_strategy="steps",
+                save_steps=1000,
+                save_total_limit=10,
+                report_to="wandb",
+            ),
+        )
+        _ = unsloth_train(trainer)
+        save_model_and_tokenizer(
+            store_path=save_path, model=self.model, tokenizer=self.tokenizer
         )
 
     def _score_candidate(self, task: Task, candidate: Grid) -> float:
