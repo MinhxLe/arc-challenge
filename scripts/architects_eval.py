@@ -1,5 +1,8 @@
 from arc.config import all_configs
-from arc.external.architects import load_model_tokenizer_formatter
+from arc.external.architects import (
+    load_model_tokenizer_formatter,
+    get_peft_model_with_lora,
+)
 import torch
 import torch.nn.functional as F
 from typing import List, Dict, Optional
@@ -122,6 +125,10 @@ class SolutionGenerator:
         self.formatter = formatter
 
         logger.info("Model loaded successfully")
+
+    def _prepare_model_for_finetuning(self) -> None:
+        self.model = get_peft_model_with_lora(self.model, fine_tuning_config)
+        FastLanguageModel.for_training(self.model)
 
     def _score_candidate(self, task: Task, candidate: Grid) -> float:
         transform_log_probs = []

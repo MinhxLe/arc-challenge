@@ -217,18 +217,7 @@ def load_model_tokenizer_formatter(
 
     if peft_trainer_checkpoint_dir is None:
         # create lora model
-        model = FastLanguageModel.get_peft_model(
-            model=model,
-            target_modules=fine_tuning_config.lora_config.target_modules,
-            r=fine_tuning_config.lora_config.lora_rank,
-            lora_alpha=fine_tuning_config.lora_config.lora_alpha,
-            lora_dropout=fine_tuning_config.lora_config.lora_dropout,
-            bias=fine_tuning_config.lora_config.bias,
-            use_gradient_checkpointing="unsloth",
-            random_state=fine_tuning_config.lora_config.random_state,
-            use_rslora=fine_tuning_config.lora_config.use_rslora,
-            loftq_config=fine_tuning_config.lora_config.loftq_config,
-        )
+        model = get_peft_model_with_lora(model, fine_tuning_config)
 
     else:
         logger.info(f"Loading model from {peft_trainer_checkpoint_dir}")
@@ -255,3 +244,20 @@ def load_model_tokenizer_formatter(
         model = fix_dtypes(model.merge_and_unload())
 
     return model, tokenizer, formatter
+
+
+def get_peft_model_with_lora(
+    model: FastLanguageModel, fine_tuning_config: FineTuningConfig
+) -> peft.PeftModel:
+    return FastLanguageModel.get_peft_model(
+        model=model,
+        target_modules=fine_tuning_config.lora_config.target_modules,
+        r=fine_tuning_config.lora_config.lora_rank,
+        lora_alpha=fine_tuning_config.lora_config.lora_alpha,
+        lora_dropout=fine_tuning_config.lora_config.lora_dropout,
+        bias=fine_tuning_config.lora_config.bias,
+        use_gradient_checkpointing="unsloth",
+        random_state=fine_tuning_config.lora_config.random_state,
+        use_rslora=fine_tuning_config.lora_config.use_rslora,
+        loftq_config=fine_tuning_config.lora_config.loftq_config,
+    )
