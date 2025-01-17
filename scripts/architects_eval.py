@@ -12,9 +12,18 @@ from unsloth import FastLanguageModel
 import numpy as np
 import math
 from arc.core import Task, Grid, Example
-from arc.transform import Identity, Rotate, Reflect, Compose, Transform
+from arc.transform import (
+    Identity,
+    Rotate,
+    Reflect,
+    Compose,
+    Transform,
+    PermuteColor,
+    generate_train_only_tasks,
+)
 from arc.datasets.seed import Datasets
 from arc.datasets import transform as dst
+from datasets import Dataset
 import random
 
 from tqdm import tqdm
@@ -129,6 +138,43 @@ class SolutionGenerator:
     def _prepare_model_for_finetuning(self) -> None:
         self.model = get_peft_model_with_lora(self.model, fine_tuning_config)
         FastLanguageModel.for_training(self.model)
+
+    def _prepare_ttt_dataset(self, dataset: Dataset) -> Dataset:
+        def format_row(row):
+            task = Task.from_dict(row)
+            row.pop("train")
+            row.pop("test")
+            return self.formatter.format_task_for_sft(task)
+
+        def not_too_long(row):
+            return (
+                len(self.tokenizer.tokenize(row["text"]))
+                <= fine_tuning_config.sftt_config.max_seq_length
+            )
+
+        base_ttt_dataset = Dataset.from_list(
+            [
+                ttt_task.to_dict()
+                for row in dataset
+                for ttt_task in generate_train_only_tasks(Task.from_dict(row))
+            ]
+        )
+
+        transformed_ttt_dataset = dst.concat(
+            base_ttt_dataset,
+            dst.apply_transform(base_ttt_dataset, Reflect(Reflect.Type.DIAGONAL)),
+            *[dst.apply_transform(base_ttt_dataset, Rotate(i)) for i in range(4)],
+            dst.apply_transform(base_ttt_dataset, PermuteColor(seed=42)),
+        )
+
+        return (
+            dst.concat(
+                transformed_ttt_dataset,
+                dst.shuffle_train_order(transformed_ttt_dataset, seed=42),
+            )
+            .map(format_row, num_proc=24)
+            .filter(not_too_long, num_proc=24)
+        )
 
     def _score_candidate(self, task: Task, candidate: Grid) -> float:
         transform_log_probs = []
