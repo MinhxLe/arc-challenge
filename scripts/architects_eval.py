@@ -34,6 +34,7 @@ from tqdm import tqdm
 import pickle as pkl
 from arc import settings
 from datetime import datetime
+import os
 
 EVAL_TMP_SAVE_FILE = (
     "/shared/research/arc_challenge/runs/arc_public_eval_2025-01-10.pkl"
@@ -182,11 +183,10 @@ class SolutionGenerator:
             .filter(not_too_long)
         )
 
-    def _run_ttt(self, dataset: Dataset) -> None:
+    def run_ttt(self, dataset: Dataset, run_name: str) -> None:
         ttt_dataset = self._prepare_ttt_dataset(dataset)
         self._prepare_model_for_finetuning()
 
-        run_name = "architects_ttt"
         save_path = f"{(settings.TEMP_ROOT_DIR)}/runs/{run_name}/{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
         trainer = Trainer(
@@ -229,8 +229,14 @@ class SolutionGenerator:
             ),
         )
         _ = unsloth_train(trainer)
+        store_path = os.path.join(save_path, "final_ttt_model")
         save_model_and_tokenizer(
-            store_path=save_path, model=self.model, tokenizer=self.tokenizer
+            store_path=store_path,
+            model=self.model,
+            tokenizer=self.tokenizer,
+        )
+        logger.info(
+            f"TTT for {run_name} complete, model ready, final model saved at {store_path}"
         )
 
     def _score_candidate(self, task: Task, candidate: Grid) -> float:
@@ -451,3 +457,38 @@ def evaluation_metrics():
     logger.info(
         f"Tasks with exceptions: {sum([e.exception is not None for e in task_evaluations])}"
     )
+
+
+def run_ttt_small():
+    eval_set = Datasets.arc_public_test.get_dataset()
+
+    failures_20_random = [
+        150,
+        224,
+        135,
+        236,
+        168,
+        153,
+        102,
+        182,
+        137,
+        257,
+        193,
+        299,
+        307,
+        218,
+        173,
+        231,
+        217,
+        198,
+        6,
+        145,
+    ]
+
+    small_ttt_eval = Dataset.from_list([eval_set[i] for i in failures_20_random])
+
+    sg = SolutionGenerator(
+        "/shared/research/arc_challenge/runs/architects_copy_2024-12-26_keepers/checkpoint-30000/"
+    )
+
+    sg.run_ttt(small_ttt_eval, "small_ttt")
