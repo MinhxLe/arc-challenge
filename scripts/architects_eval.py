@@ -173,7 +173,7 @@ class SolutionGenerator:
                 dst.shuffle_train_order(transformed_ttt_dataset, seed=42),
             )
             .map(format_row, num_proc=24)
-            .filter(not_too_long, num_proc=24)
+            .filter(not_too_long)
         )
 
     def _score_candidate(self, task: Task, candidate: Grid) -> float:
