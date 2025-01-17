@@ -144,6 +144,7 @@ class SolutionGenerator:
 
     def _prepare_model_for_finetuning(self) -> None:
         self.model = get_peft_model_with_lora(self.model, fine_tuning_config)
+        self.model.to("cuda")
         FastLanguageModel.for_training(self.model)
 
     def _prepare_ttt_dataset(self, dataset: Dataset) -> Dataset:
