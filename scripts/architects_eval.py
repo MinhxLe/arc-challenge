@@ -179,7 +179,7 @@ class SolutionGenerator:
                 transformed_ttt_dataset,
                 dst.shuffle_train_order(transformed_ttt_dataset, seed=42),
             )
-            .map(format_row, num_proc=24)
+            .map(format_row)
             .filter(not_too_long)
         )
 
