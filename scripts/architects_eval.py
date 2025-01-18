@@ -45,9 +45,9 @@ EVAL_TMP_SAVE_FILE = (
     "/shared/research/arc_challenge/runs/arc_public_eval_2025-01-10.pkl"
 )
 
-torch.set_default_device(
-    "cuda"
-) if torch.cuda.is_available() else torch.set_default_device("cpu")
+# torch.set_default_device(
+#     "cuda"
+# ) if torch.cuda.is_available() else torch.set_default_device("cpu")
 
 
 fine_tuning_config = next(
