@@ -6,7 +6,7 @@ from arc.external.architects import (
     save_model_and_tokenizer,
 )
 import torch
-from torch.utils.data import DataLoader, IterableDataset
+from torch.utils.data import DataLoader, IterableDataset, SequentialSampler
 import torch.nn.functional as F
 from typing import List, Dict, Optional
 from dataclasses import dataclass
@@ -39,6 +39,7 @@ import pickle as pkl
 from arc import settings
 from datetime import datetime
 import os
+import time
 
 EVAL_TMP_SAVE_FILE = (
     "/shared/research/arc_challenge/runs/arc_public_eval_2025-01-10.pkl"
@@ -89,10 +90,14 @@ class NoShuffleTrainer(Trainer):
         }
 
         if not isinstance(train_dataset, IterableDataset):
-            dataloader_params["sampler"] = self._get_train_sampler()
+            logger.info("You're in that block yo")
+            time.sleep(10)
+            dataloader_params["sampler"] = SequentialSampler(self.train_dataset)
             dataloader_params["drop_last"] = self.args.dataloader_drop_last
             dataloader_params["worker_init_fn"] = seed_worker
             dataloader_params["prefetch_factor"] = self.args.dataloader_prefetch_factor
+            logger.info("You survived that block yo")
+            time.sleep(10)
 
         return self.accelerator.prepare(DataLoader(train_dataset, **dataloader_params))
 
@@ -233,6 +238,12 @@ class SolutionGenerator:
 
     def run_ttt(self, dataset: Dataset, run_name: str) -> None:
         ttt_dataset = self._prepare_ttt_dataset(dataset)
+
+        # shuffling here b/c we're using a noshuffletrainer
+        ttt_dataset = dst.sample(
+            ttt_dataset, len(ttt_dataset), seed=fine_tuning_config.data_config.seed
+        )
+
         self._prepare_model_for_finetuning()
 
         save_path = f"{(settings.TEMP_ROOT_DIR)}/runs/{run_name}/{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -276,6 +287,8 @@ class SolutionGenerator:
                 report_to="wandb",
             ),
         )
+        logger.info("Trainer instantiated")
+        time.sleep(10)
         _ = unsloth_train(trainer)
         store_path = os.path.join(save_path, "final_ttt_model")
         save_model_and_tokenizer(
