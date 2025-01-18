@@ -205,7 +205,8 @@ def get_and_fix_peft_weights(store):
 # Helper function to abstract away from of the architects' manipulations
 def load_model_tokenizer_formatter(
     fine_tuning_config: FineTuningConfig,
-    peft_trainer_checkpoint_dir: ta.Optional[str] = None,
+    initial_peft_training_checkpoint_path: ta.Optional[str] = None,
+    ttt_training_checkpoint_path: ta.Optional[str] = None,
 ) -> FastLanguageModel:
     # load base model & reduce embedding size
     model, tokenizer = FastLanguageModel.from_pretrained(
@@ -216,35 +217,51 @@ def load_model_tokenizer_formatter(
 
     model, tokenizer, formatter = preprocess_model_tokenizer_formatter(model, tokenizer)
 
-    if peft_trainer_checkpoint_dir is None:
+    if initial_peft_training_checkpoint_path is None:
         # create lora model
         model = get_peft_model_with_lora(model, fine_tuning_config)
 
     else:
-        logger.info(f"Loading model from {peft_trainer_checkpoint_dir}")
-
-        model = peft.PeftModel.from_pretrained(
-            model=model,
-            model_id=peft_trainer_checkpoint_dir,
-            device_map="cuda",
+        logger.info(
+            f"Loading trained model from {initial_peft_training_checkpoint_path}"
+        )
+        model = _merge_model_and_peft_checkpoint(
+            model, initial_peft_training_checkpoint_path
         )
 
-        weight_set_result = peft.set_peft_model_state_dict(
-            model,
-            get_and_fix_peft_weights(peft_trainer_checkpoint_dir),
-        )
-        assert (
-            not weight_set_result.unexpected_keys
-        ), "error loading weights - some keys not available in model"
-
-        # This part of the copy/paste from architects isn't working.
-        # assert hasattr(
-        #     model, "peft_type"
-        # ), "This method is only known to work for peft models."
-
-        model = fix_dtypes(model.merge_and_unload())
+        if ttt_training_checkpoint_path is not None:
+            logger.info(f"Loading TTT weights from {ttt_training_checkpoint_path}")
+            model = _merge_model_and_peft_checkpoint(
+                model, ttt_training_checkpoint_path
+            )
 
     return model, tokenizer, formatter
+
+
+def _merge_model_and_peft_checkpoint(
+    model: FastLanguageModel, peft_checkpoint_path: str
+) -> FastLanguageModel:
+    model = peft.PeftModel.from_pretrained(
+        model=model,
+        model_id=peft_checkpoint_path,
+        device_map="cuda",
+    )
+    weight_set_result = peft.set_peft_model_state_dict(
+        model,
+        get_and_fix_peft_weights(peft_checkpoint_path),
+    )
+    assert (
+        not weight_set_result.unexpected_keys
+    ), "error loading weights - some keys not available in model"
+
+    # This part of the copy/paste from architects isn't working.
+    # assert hasattr(
+    #     model, "peft_type"
+    # ), "This method is only known to work for peft models."
+
+    model = fix_dtypes(model.merge_and_unload())
+
+    return model
 
 
 def get_peft_model_with_lora(

@@ -45,6 +45,10 @@ EVAL_TMP_SAVE_FILE = (
     "/shared/research/arc_challenge/runs/arc_public_eval_2025-01-10.pkl"
 )
 
+EVAL_TMP_SAVE_FILE_SMALL_TTT = (
+    "/shared/research/arc_challenge/runs/arc_public_eval_small_ttt_2025-01-18.pkl"
+)
+
 # torch.set_default_device(
 #     "cuda"
 # ) if torch.cuda.is_available() else torch.set_default_device("cpu")
@@ -173,19 +177,22 @@ class TaskEvaluation:
 
 
 class SolutionGenerator:
-    def __init__(self, peft_checkpoint_path: str):
+    def __init__(
+        self, peft_checkpoint_path: str, ttt_checkpoint_path: Optional[str] = None
+    ):
         """Initialize the inference module.
         Args:
             checkpoint_path: Path to the model checkpoint
         """
         self.peft_checkpoint_path = peft_checkpoint_path
+        self.ttt_checkpoint_path = ttt_checkpoint_path
         self._load_model()
 
     def _load_model(self) -> None:
         """Load the fine-tuned model from checkpoint."""
 
         model, tokenizer, formatter = load_model_tokenizer_formatter(
-            fine_tuning_config, self.peft_checkpoint_path
+            fine_tuning_config, self.peft_checkpoint_path, self.ttt_checkpoint_path
         )
 
         self.model = model
@@ -502,8 +509,8 @@ def run_evaluation():
             pkl.dump(task_evaluations, file)
 
 
-def evaluation_metrics():
-    with open(EVAL_TMP_SAVE_FILE, "rb") as file:
+def evaluation_metrics(save_file: str):
+    with open(save_file, "rb") as file:
         task_evaluations = pkl.load(file)
 
     successes = []
@@ -520,7 +527,7 @@ def evaluation_metrics():
     )
 
 
-def run_ttt_small():
+def get_ttt_small_dataset():
     eval_set = Datasets.arc_public_test.get_dataset()
 
     failures_20_random = [
@@ -546,10 +553,40 @@ def run_ttt_small():
         145,
     ]
 
-    small_ttt_eval = Dataset.from_list([eval_set[i] for i in failures_20_random])
+    return Dataset.from_list([eval_set[i] for i in failures_20_random])
 
+
+def run_ttt_small():
     sg = SolutionGenerator(
         "/shared/research/arc_challenge/runs/architects_copy_2024-12-26_keepers/checkpoint-30000/"
     )
 
-    sg.run_ttt(small_ttt_eval, "small_ttt")
+    sg.run_ttt(get_ttt_small_dataset(), "small_ttt")
+
+
+def run_ttt_small_evaluation():
+    sg = SolutionGenerator(
+        "/shared/research/arc_challenge/runs/architects_copy_2024-12-26_keepers/checkpoint-30000/",
+        "/shared/research/arc_challenge/runs/small_ttt/20250118_110646/final_ttt_model/",
+    )
+
+    task_evaluations = []
+
+    ttt_small_dataset = get_ttt_small_dataset()
+
+    for dataset_task in tqdm(ttt_small_dataset):
+        task = Task.from_dict(dataset_task)
+        try:
+            solutions = sg.solve_task(task, num_solutions=2)
+            task_evaluations.append(TaskEvaluation(task=task, solutions=solutions))
+        except Exception as e:
+            task_evaluations.append(
+                TaskEvaluation(
+                    task=task,
+                    solutions=[],
+                    exception=e,
+                )
+            )
+
+        with open(EVAL_TMP_SAVE_FILE_SMALL_TTT, "wb") as file:
+            pkl.dump(task_evaluations, file)
