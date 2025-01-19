@@ -595,3 +595,5 @@ def run_ttt_small_evaluation():
 
         with open(EVAL_TMP_SAVE_FILE_SMALL_TTT, "wb") as file:
             pkl.dump(task_evaluations, file)
+
+    evaluation_metrics(EVAL_TMP_SAVE_FILE_SMALL_TTT)
