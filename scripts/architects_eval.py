@@ -574,7 +574,7 @@ def run_ttt_small_evaluation():
     ):
         warmup_task = Task.from_dict(warmup)
         logger.info(
-            f"Warmup: {TaskEvaluation(task=warmup_task, solutions=sg.solve_task(warmup_task, 2)).success}"
+            f"Warmup: {TaskEvaluation(task=warmup_task, solutions=sg.solve_task(warmup_task, 2)).success()}"
         )
 
     ttt_small_dataset = get_ttt_small_dataset()
