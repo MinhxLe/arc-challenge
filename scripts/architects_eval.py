@@ -564,8 +564,6 @@ def run_ttt_small_evaluation():
         "/shared/research/arc_challenge/runs/small_ttt/20250118_110646/final_ttt_model/",
     )
 
-    task_evaluations = []
-
     for warmup in Dataset.from_list(
         [
             Datasets.arc_public_train.get_dataset()[0],
@@ -579,6 +577,55 @@ def run_ttt_small_evaluation():
 
     ttt_small_dataset = get_ttt_small_dataset()
 
+    task_evaluations = []
+    for dataset_task in tqdm(ttt_small_dataset):
+        task = Task.from_dict(dataset_task)
+        try:
+            solutions = sg.solve_task(task, num_solutions=2)
+            task_evaluations.append(TaskEvaluation(task=task, solutions=solutions))
+        except Exception as e:
+            task_evaluations.append(
+                TaskEvaluation(
+                    task=task,
+                    solutions=[],
+                    exception=e,
+                )
+            )
+
+        with open(EVAL_TMP_SAVE_FILE_SMALL_TTT, "wb") as file:
+            pkl.dump(task_evaluations, file)
+
+    evaluation_metrics(EVAL_TMP_SAVE_FILE_SMALL_TTT)
+
+
+def run_ttt_small_and_eval():
+    sg = SolutionGenerator(
+        "/shared/research/arc_challenge/runs/architects_copy_2024-12-26_keepers/checkpoint-30000/"
+    )
+
+    warmups = Dataset.from_list(
+        [
+            Datasets.arc_public_train.get_dataset()[0],
+            Datasets.arc_public_test.get_dataset()[0],
+        ]
+    )
+
+    for warmup in warmups:
+        warmup_task = Task.from_dict(warmup)
+        logger.info(
+            f"Warmup for fine tuned model: {TaskEvaluation(task=warmup_task, solutions=sg.solve_task(warmup_task, 2)).success()}"
+        )
+
+    ttt_small_dataset = get_ttt_small_dataset()
+    sg.run_ttt(ttt_small_dataset, "small_ttt")
+
+    for warmup in warmups:
+        warmup_task = Task.from_dict(warmup)
+        logger.info(
+            f"Warmup for TTT model: {TaskEvaluation(task=warmup_task, solutions=sg.solve_task(warmup_task, 2)).success()}"
+        )
+
+    task_evaluations = []
     for dataset_task in tqdm(ttt_small_dataset):
         task = Task.from_dict(dataset_task)
         try:
