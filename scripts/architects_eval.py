@@ -39,7 +39,6 @@ import pickle as pkl
 from arc import settings
 from datetime import datetime
 import os
-import time
 
 EVAL_TMP_SAVE_FILE = (
     "/shared/research/arc_challenge/runs/arc_public_eval_2025-01-10.pkl"
@@ -49,9 +48,9 @@ EVAL_TMP_SAVE_FILE_SMALL_TTT = (
     "/shared/research/arc_challenge/runs/arc_public_eval_small_ttt_2025-01-18.pkl"
 )
 
-# torch.set_default_device(
-#     "cuda"
-# ) if torch.cuda.is_available() else torch.set_default_device("cpu")
+torch.set_default_device(
+    "cuda"
+) if torch.cuda.is_available() else torch.set_default_device("cpu")
 
 
 fine_tuning_config = next(
@@ -94,14 +93,10 @@ class NoShuffleTrainer(Trainer):
         }
 
         if not isinstance(train_dataset, IterableDataset):
-            logger.info("You're in that block yo")
-            time.sleep(10)
             dataloader_params["sampler"] = SequentialSampler(self.train_dataset)
             dataloader_params["drop_last"] = self.args.dataloader_drop_last
             dataloader_params["worker_init_fn"] = seed_worker
             dataloader_params["prefetch_factor"] = self.args.dataloader_prefetch_factor
-            logger.info("You survived that block yo")
-            time.sleep(10)
 
         return self.accelerator.prepare(DataLoader(train_dataset, **dataloader_params))
 
@@ -295,7 +290,6 @@ class SolutionGenerator:
             ),
         )
         logger.info("Trainer instantiated")
-        time.sleep(10)
         _ = unsloth_train(trainer)
         store_path = os.path.join(save_path, "final_ttt_model")
         save_model_and_tokenizer(
@@ -571,6 +565,17 @@ def run_ttt_small_evaluation():
     )
 
     task_evaluations = []
+
+    for warmup in Dataset.from_list(
+        [
+            Datasets.arc_public_train.get_dataset()[0],
+            Datasets.arc_public_test.get_dataset()[0],
+        ]
+    ):
+        warmup_task = Task.from_dict(warmup)
+        logger.info(
+            f"Warmup: {TaskEvaluation(task=warmup_task, solutions=sg.solve_task(warmup_task, 2)).success}"
+        )
 
     ttt_small_dataset = get_ttt_small_dataset()
 
