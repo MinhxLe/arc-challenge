@@ -21,10 +21,10 @@ from arc.transform import (
     Identity,
     Rotate,
     Reflect,
-    Compose,
     Transform,
     PermuteColor,
     generate_train_only_tasks,
+    create_random_transform,
 )
 from arc.datasets.seed import Datasets
 from arc.datasets import transform as dst
@@ -48,9 +48,9 @@ EVAL_TMP_SAVE_FILE_SMALL_TTT = (
     "/shared/research/arc_challenge/runs/arc_public_eval_small_ttt_2025-01-18.pkl"
 )
 
-torch.set_default_device(
-    "cuda"
-) if torch.cuda.is_available() else torch.set_default_device("cpu")
+# torch.set_default_device(
+#     "cuda"
+# ) if torch.cuda.is_available() else torch.set_default_device("cpu")
 
 
 fine_tuning_config = next(
@@ -151,9 +151,7 @@ TRANSFORMS: List[Transform] = [
     Reflect(Reflect.Type.HORIZONTAL),
     Reflect(Reflect.Type.VERTICAL),
     Reflect(Reflect.Type.DIAGONAL),
-    Compose(
-        transforms=[Reflect(Reflect.Type.DIAGONAL), Reflect(Reflect.Type.HORIZONTAL)]
-    ),
+    Reflect(Reflect.Type.OTHER_DIAGONAL),
 ]
 
 
@@ -197,6 +195,7 @@ class SolutionGenerator:
         logger.info("Model loaded successfully")
 
     def _prepare_model_for_finetuning(self) -> None:
+        FastLanguageModel.for_training(self.model)
         self.model = get_peft_model_with_lora(self.model, fine_tuning_config)
         self.model.to("cuda")
         FastLanguageModel.for_training(self.model)
@@ -222,17 +221,36 @@ class SolutionGenerator:
             ]
         )
 
+        random.seed(fine_tuning_config.data_config.seed)
+
+        more_transforms = [
+            create_random_transform(seed=random.randint(0, 1_000_000_000))
+            for _ in range(30)
+        ]
+
         transformed_ttt_dataset = dst.concat(
-            base_ttt_dataset,
-            dst.apply_transform(base_ttt_dataset, Reflect(Reflect.Type.DIAGONAL)),
-            *[dst.apply_transform(base_ttt_dataset, Rotate(i)) for i in range(4)],
-            dst.apply_transform(base_ttt_dataset, PermuteColor(seed=42)),
+            *[
+                dst.apply_transform(base_ttt_dataset, transform)
+                for transform in TRANSFORMS
+            ],
+            *[
+                dst.apply_transform(
+                    base_ttt_dataset,
+                    PermuteColor(seed=fine_tuning_config.data_config.seed),
+                )
+            ],
+            *[
+                dst.apply_transform(base_ttt_dataset, transform)
+                for transform in more_transforms
+            ],
         )
 
         return (
             dst.concat(
-                transformed_ttt_dataset,
-                dst.shuffle_train_order(transformed_ttt_dataset, seed=42),
+                base_ttt_dataset,
+                dst.shuffle_train_order(
+                    transformed_ttt_dataset, seed=fine_tuning_config.data_config.seed
+                ),
             )
             .map(format_row)
             .filter(not_too_long)
@@ -603,23 +621,17 @@ def run_ttt_small_and_eval():
         "/shared/research/arc_challenge/runs/architects_copy_2024-12-26_keepers/checkpoint-30000/"
     )
 
-    warmups = Dataset.from_list(
+    ttt_small_dataset = get_ttt_small_dataset()
+    sg.run_ttt(ttt_small_dataset, "small_ttt")
+
+    torch.set_default_device("cuda")
+
+    for warmup in Dataset.from_list(
         [
             Datasets.arc_public_train.get_dataset()[0],
             Datasets.arc_public_test.get_dataset()[0],
         ]
-    )
-
-    for warmup in warmups:
-        warmup_task = Task.from_dict(warmup)
-        logger.info(
-            f"Warmup for fine tuned model: {TaskEvaluation(task=warmup_task, solutions=sg.solve_task(warmup_task, 2)).success()}"
-        )
-
-    ttt_small_dataset = get_ttt_small_dataset()
-    sg.run_ttt(ttt_small_dataset, "small_ttt")
-
-    for warmup in warmups:
+    ):
         warmup_task = Task.from_dict(warmup)
         logger.info(
             f"Warmup for TTT model: {TaskEvaluation(task=warmup_task, solutions=sg.solve_task(warmup_task, 2)).success()}"
