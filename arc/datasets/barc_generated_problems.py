@@ -12,11 +12,14 @@ from typing import List, Tuple
 from datasets import load_dataset
 from arc.core import Grid, Color
 from loguru import logger
+from arc import settings
 
 from arc.program import Program
 
 HF_DATASET_NAME = "barc0/induction_100k-gpt4-description-gpt4omini-code_generated_problems_messages_format_0.3"
-_PARSED_DATASET_FNAME = "tmp/processed/train_barc_generated_problems.pkl"
+_PARSED_DATASET_FNAME = (
+    f"{settings.TEMP_ROOT_DIR}/data/processed/train_barc_generated_problems.pkl"
+)
 
 
 def get_raw_dataset():
