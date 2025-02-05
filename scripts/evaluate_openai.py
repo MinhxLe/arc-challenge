@@ -8,7 +8,7 @@ import os
 from loguru import logger
 
 from arc.external import openai
-from arc.program import Program
+from arc.program import Program, ProgramExecution
 
 SOLUTION_DIR = "data/openai/code_generation"
 os.makedirs(SOLUTION_DIR, exist_ok=True)
@@ -18,9 +18,11 @@ def _modified_create_solve_task_prompt(task: arckit.Task) -> str:
     return prompts.create_solve_task_prompt(task) + prompts.addendum_for_nonfinetuned
 
 
-def _modified_create_improve_solve_task_prompt(task, programs) -> str:
+def _modified_create_improve_solve_task_prompt(
+    task: arckit.Task, program_executions: list[ProgramExecution]
+) -> str:
     return (
-        prompts.create_improve_solve_task_prompt(task, programs)
+        prompts.create_improve_solve_task_prompt(task, program_executions)
         + f"Reminder: {prompts.addendum_for_nonfinetuned}"
     )
 
@@ -51,12 +53,16 @@ def generate_code(task) -> list[str]:
     return [x for x in codes if x is not None]
 
 
-def generate_improve_code(task, programs: list[Program]) -> list[str]:
+def generate_improve_code(
+    task, program_executions: list[ProgramExecution]
+) -> list[str]:
     codes = [
         parse_code(
             openai.complete(
                 system_prompt=prompts.programmer_role_prompt,
-                prompt=_modified_create_improve_solve_task_prompt(task, programs),
+                prompt=_modified_create_improve_solve_task_prompt(
+                    task, program_executions
+                ),
             )
         )
     ]
@@ -74,8 +80,8 @@ def solve_task(
     task: arckit.Task,
     max_attempts: int = 1_000,
     save_fname: Optional[str] = None,
-) -> list[Program]:
-    programs = []
+) -> list[ProgramExecution]:
+    program_executions = []
     console = Console(record=True)
     if save_fname:
         file_path = os.path.join(SOLUTION_DIR, save_fname + ".html")
@@ -88,31 +94,24 @@ def solve_task(
 
     for i in range(0, max_attempts):
         logger.debug(f"on attempt {i}")
-        if len(programs) == 0:
+        if len(program_executions) == 0:
             source_codes = generate_code(task)
         else:
-            source_codes = generate_improve_code(task, programs)
+            source_codes = generate_improve_code(task, program_executions)
         for source_code in source_codes:
-            fn = interpret_code(source_code)
-            if fn is not None:
-                program = Program(task, source_code, fn)
-                try:
-                    results = program.create_result_table()
-                except Exception:
-                    results = "Unable to display evaluation"
+            program_execution = ProgramExecution(Program.from_source(source_code), task)
 
-                console.print(source_code)
-                console.print("\n")
-                console.print(results)
-                console.print("\n")
+            console.print(source_code)
+            console.print("\n")
+            console.print(program_execution.create_result_table())
+            console.print("\n")
+            program_executions.append(program_execution)
 
-                programs.append(program)
-
-                if program.training_success:
-                    console.print("Success!!")
-                    break
+            if program_execution.training_success:
+                console.print("Success!!")
+                break
 
     if file_path:
         console.save_html(file_path)
 
-    return programs
+    return program_executions
