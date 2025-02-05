@@ -56,8 +56,6 @@ def generate_code(task) -> list[str]:
 def generate_improve_code(
     task, program_executions: list[ProgramExecution]
 ) -> list[str]:
-    print(prompts.programmer_role_prompt)
-    print(_modified_create_improve_solve_task_prompt(task, program_executions))
     codes = [
         parse_code(
             openai.complete(
