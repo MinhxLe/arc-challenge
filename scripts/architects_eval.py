@@ -1,34 +1,104 @@
 from arc.config import all_configs
-from arc.external.architects import load_model_tokenizer_formatter
+from arc.external.architects import (
+    load_model_tokenizer_formatter,
+    get_peft_model_with_lora,
+    InputMaskingDataCollator,
+    save_model_and_tokenizer,
+)
 import torch
+from torch.utils.data import DataLoader, IterableDataset, SequentialSampler
 import torch.nn.functional as F
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 from loguru import logger
-from unsloth import FastLanguageModel
+from unsloth import FastLanguageModel, unsloth_train, is_bfloat16_supported
+from unsloth import UnslothTrainer as Trainer
+from unsloth import UnslothTrainingArguments as TrainingArguments
 import numpy as np
 import math
 from arc.core import Task, Grid, Example
-from arc.transform import Identity, Rotate, Reflect, Compose, Transform
+from arc.transform import (
+    Identity,
+    Rotate,
+    Reflect,
+    Transform,
+    PermuteColor,
+    generate_train_only_tasks,
+    create_random_transform,
+)
 from arc.datasets.seed import Datasets
 from arc.datasets import transform as dst
+from datasets import Dataset
 import random
+
+from transformers.utils.import_utils import is_datasets_available
+from transformers.trainer_utils import seed_worker
 
 from tqdm import tqdm
 import pickle as pkl
+from arc import settings
+from datetime import datetime
+import os
 
 EVAL_TMP_SAVE_FILE = (
     "/shared/research/arc_challenge/runs/arc_public_eval_2025-01-10.pkl"
 )
 
-torch.set_default_device(
-    "cuda"
-) if torch.cuda.is_available() else torch.set_default_device("cpu")
+EVAL_TMP_SAVE_FILE_SMALL_TTT = (
+    "/shared/research/arc_challenge/runs/arc_public_eval_small_ttt_2025-01-18.pkl"
+)
+
+# torch.set_default_device(
+#     "cuda"
+# ) if torch.cuda.is_available() else torch.set_default_device("cpu")
 
 
 fine_tuning_config = next(
     config for config in all_configs if config.name == "architects"
 )
+
+
+# Monstrous hack to get around torch.Generator cuda problems on vast ai box
+class NoShuffleTrainer(Trainer):
+    def get_train_dataloader(self) -> DataLoader:
+        """
+        Returns the training [`~torch.utils.data.DataLoader`].
+
+        Will use no sampler if `train_dataset` does not implement `__len__`, a random sampler (adapted to distributed
+        training if necessary) otherwise.
+
+        Subclass and override this method if you want to inject some custom behavior.
+        """
+        if self.train_dataset is None:
+            raise ValueError("Trainer: training requires a train_dataset.")
+
+        train_dataset = self.train_dataset
+        data_collator = self.data_collator
+        if is_datasets_available() and isinstance(train_dataset, Dataset):
+            train_dataset = self._remove_unused_columns(
+                train_dataset, description="training"
+            )
+        else:
+            data_collator = self._get_collator_with_removed_columns(
+                data_collator, description="training"
+            )
+
+        dataloader_params = {
+            "batch_size": self._train_batch_size,
+            "collate_fn": data_collator,
+            "num_workers": self.args.dataloader_num_workers,
+            "pin_memory": self.args.dataloader_pin_memory,
+            "persistent_workers": self.args.dataloader_persistent_workers,
+            "shuffle": False,
+        }
+
+        if not isinstance(train_dataset, IterableDataset):
+            dataloader_params["sampler"] = SequentialSampler(self.train_dataset)
+            dataloader_params["drop_last"] = self.args.dataloader_drop_last
+            dataloader_params["worker_init_fn"] = seed_worker
+            dataloader_params["prefetch_factor"] = self.args.dataloader_prefetch_factor
+
+        return self.accelerator.prepare(DataLoader(train_dataset, **dataloader_params))
 
 
 def _dedupe_np_arrays(arr_list: list[np.ndarray]):
@@ -81,9 +151,7 @@ TRANSFORMS: List[Transform] = [
     Reflect(Reflect.Type.HORIZONTAL),
     Reflect(Reflect.Type.VERTICAL),
     Reflect(Reflect.Type.DIAGONAL),
-    Compose(
-        transforms=[Reflect(Reflect.Type.DIAGONAL), Reflect(Reflect.Type.HORIZONTAL)]
-    ),
+    Reflect(Reflect.Type.OTHER_DIAGONAL),
 ]
 
 
@@ -102,19 +170,22 @@ class TaskEvaluation:
 
 
 class SolutionGenerator:
-    def __init__(self, peft_checkpoint_path: str):
+    def __init__(
+        self, peft_checkpoint_path: str, ttt_checkpoint_path: Optional[str] = None
+    ):
         """Initialize the inference module.
         Args:
             checkpoint_path: Path to the model checkpoint
         """
         self.peft_checkpoint_path = peft_checkpoint_path
+        self.ttt_checkpoint_path = ttt_checkpoint_path
         self._load_model()
 
     def _load_model(self) -> None:
         """Load the fine-tuned model from checkpoint."""
 
         model, tokenizer, formatter = load_model_tokenizer_formatter(
-            fine_tuning_config, self.peft_checkpoint_path
+            fine_tuning_config, self.peft_checkpoint_path, self.ttt_checkpoint_path
         )
 
         self.model = model
@@ -122,6 +193,131 @@ class SolutionGenerator:
         self.formatter = formatter
 
         logger.info("Model loaded successfully")
+
+    def _prepare_model_for_finetuning(self) -> None:
+        FastLanguageModel.for_training(self.model)
+        self.model = get_peft_model_with_lora(self.model, fine_tuning_config)
+        self.model.to("cuda")
+        FastLanguageModel.for_training(self.model)
+
+    def _prepare_ttt_dataset(self, dataset: Dataset) -> Dataset:
+        def format_row(row):
+            task = Task.from_dict(row)
+            row.pop("train")
+            row.pop("test")
+            return self.formatter.format_task_for_sft(task)
+
+        def not_too_long(row):
+            return (
+                len(self.tokenizer.tokenize(row["text"]))
+                <= fine_tuning_config.sftt_config.max_seq_length
+            )
+
+        base_ttt_dataset = Dataset.from_list(
+            [
+                ttt_task.to_dict()
+                for row in dataset
+                for ttt_task in generate_train_only_tasks(Task.from_dict(row))
+            ]
+        )
+
+        random.seed(fine_tuning_config.data_config.seed)
+
+        more_transforms = [
+            create_random_transform(seed=random.randint(0, 1_000_000_000))
+            for _ in range(30)
+        ]
+
+        transformed_ttt_dataset = dst.concat(
+            *[
+                dst.apply_transform(base_ttt_dataset, transform)
+                for transform in TRANSFORMS
+            ],
+            *[
+                dst.apply_transform(
+                    base_ttt_dataset,
+                    PermuteColor(seed=fine_tuning_config.data_config.seed),
+                )
+            ],
+            *[
+                dst.apply_transform(base_ttt_dataset, transform)
+                for transform in more_transforms
+            ],
+        )
+
+        return (
+            dst.concat(
+                base_ttt_dataset,
+                dst.shuffle_train_order(
+                    transformed_ttt_dataset, seed=fine_tuning_config.data_config.seed
+                ),
+            )
+            .map(format_row)
+            .filter(not_too_long)
+        )
+
+    def run_ttt(self, dataset: Dataset, run_name: str) -> None:
+        ttt_dataset = self._prepare_ttt_dataset(dataset)
+
+        # shuffling here b/c we're using a noshuffletrainer
+        ttt_dataset = dst.sample(
+            ttt_dataset, len(ttt_dataset), seed=fine_tuning_config.data_config.seed
+        )
+
+        self._prepare_model_for_finetuning()
+
+        save_path = f"{(settings.TEMP_ROOT_DIR)}/runs/{run_name}/{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+        trainer = NoShuffleTrainer(
+            model=self.model,
+            tokenizer=self.tokenizer,
+            train_dataset=ttt_dataset,
+            # eval_dataset=eval_dataset,
+            dataset_text_field=fine_tuning_config.sftt_config.dataset_text_field,
+            max_seq_length=fine_tuning_config.sftt_config.max_seq_length,
+            data_collator=InputMaskingDataCollator(
+                instruction_template=self.formatter.input_head_token,
+                response_template=self.formatter.output_head_token,
+                mlm=False,
+                tokenizer=self.tokenizer,
+                mask_first_n_examples=0,
+            ),
+            args=TrainingArguments(
+                run_name=run_name,
+                per_device_train_batch_size=4,
+                # per_device_eval_batch_size=fine_tuning_config.sftt_config.per_device_eval_batch_size,
+                gradient_accumulation_steps=1,
+                warmup_ratio=0.25,
+                num_train_epochs=1,
+                learning_rate=1e-4,
+                embedding_learning_rate=1e-5,
+                # eval_strategy="steps",
+                fp16=not is_bfloat16_supported(),
+                bf16=is_bfloat16_supported(),
+                logging_steps=10,
+                optim="adamw_8bit",
+                weight_decay=0.00,
+                lr_scheduler_type="cosine",
+                seed=42,
+                output_dir=save_path,
+                resume_from_checkpoint=True,
+                save_strategy="steps",
+                save_steps=1000,
+                save_total_limit=10,
+                report_to="wandb",
+            ),
+        )
+        logger.info("Trainer instantiated")
+        _ = unsloth_train(trainer)
+        store_path = os.path.join(save_path, "final_ttt_model")
+        save_model_and_tokenizer(
+            store_path=store_path,
+            model=self.model,
+            tokenizer=self.tokenizer,
+        )
+        logger.info(
+            f"TTT for {run_name} complete, model ready, final model saved at {store_path}"
+        )
 
     def _score_candidate(self, task: Task, candidate: Grid) -> float:
         transform_log_probs = []
@@ -325,8 +521,8 @@ def run_evaluation():
             pkl.dump(task_evaluations, file)
 
 
-def evaluation_metrics():
-    with open(EVAL_TMP_SAVE_FILE, "rb") as file:
+def evaluation_metrics(save_file: str):
+    with open(save_file, "rb") as file:
         task_evaluations = pkl.load(file)
 
     successes = []
@@ -341,3 +537,122 @@ def evaluation_metrics():
     logger.info(
         f"Tasks with exceptions: {sum([e.exception is not None for e in task_evaluations])}"
     )
+
+
+def get_ttt_small_dataset():
+    eval_set = Datasets.arc_public_test.get_dataset()
+
+    failures_20_random = [
+        150,
+        224,
+        135,
+        236,
+        168,
+        153,
+        102,
+        182,
+        137,
+        257,
+        193,
+        299,
+        307,
+        218,
+        173,
+        231,
+        217,
+        198,
+        6,
+        145,
+    ]
+
+    return Dataset.from_list([eval_set[i] for i in failures_20_random])
+
+
+def run_ttt_small():
+    sg = SolutionGenerator(
+        "/shared/research/arc_challenge/runs/architects_copy_2024-12-26_keepers/checkpoint-30000/"
+    )
+
+    sg.run_ttt(get_ttt_small_dataset(), "small_ttt")
+
+
+def run_ttt_small_evaluation():
+    sg = SolutionGenerator(
+        "/shared/research/arc_challenge/runs/architects_copy_2024-12-26_keepers/checkpoint-30000/",
+        "/shared/research/arc_challenge/runs/small_ttt/20250118_110646/final_ttt_model/",
+    )
+
+    for warmup in Dataset.from_list(
+        [
+            Datasets.arc_public_train.get_dataset()[0],
+            Datasets.arc_public_test.get_dataset()[0],
+        ]
+    ):
+        warmup_task = Task.from_dict(warmup)
+        logger.info(
+            f"Warmup: {TaskEvaluation(task=warmup_task, solutions=sg.solve_task(warmup_task, 2)).success()}"
+        )
+
+    ttt_small_dataset = get_ttt_small_dataset()
+
+    task_evaluations = []
+    for dataset_task in tqdm(ttt_small_dataset):
+        task = Task.from_dict(dataset_task)
+        try:
+            solutions = sg.solve_task(task, num_solutions=2)
+            task_evaluations.append(TaskEvaluation(task=task, solutions=solutions))
+        except Exception as e:
+            task_evaluations.append(
+                TaskEvaluation(
+                    task=task,
+                    solutions=[],
+                    exception=e,
+                )
+            )
+
+        with open(EVAL_TMP_SAVE_FILE_SMALL_TTT, "wb") as file:
+            pkl.dump(task_evaluations, file)
+
+    evaluation_metrics(EVAL_TMP_SAVE_FILE_SMALL_TTT)
+
+
+def run_ttt_small_and_eval():
+    sg = SolutionGenerator(
+        "/shared/research/arc_challenge/runs/architects_copy_2024-12-26_keepers/checkpoint-30000/"
+    )
+
+    ttt_small_dataset = get_ttt_small_dataset()
+    sg.run_ttt(ttt_small_dataset, "small_ttt")
+
+    torch.set_default_device("cuda")
+
+    for warmup in Dataset.from_list(
+        [
+            Datasets.arc_public_train.get_dataset()[0],
+            Datasets.arc_public_test.get_dataset()[0],
+        ]
+    ):
+        warmup_task = Task.from_dict(warmup)
+        logger.info(
+            f"Warmup for TTT model: {TaskEvaluation(task=warmup_task, solutions=sg.solve_task(warmup_task, 2)).success()}"
+        )
+
+    task_evaluations = []
+    for dataset_task in tqdm(ttt_small_dataset):
+        task = Task.from_dict(dataset_task)
+        try:
+            solutions = sg.solve_task(task, num_solutions=2)
+            task_evaluations.append(TaskEvaluation(task=task, solutions=solutions))
+        except Exception as e:
+            task_evaluations.append(
+                TaskEvaluation(
+                    task=task,
+                    solutions=[],
+                    exception=e,
+                )
+            )
+
+        with open(EVAL_TMP_SAVE_FILE_SMALL_TTT, "wb") as file:
+            pkl.dump(task_evaluations, file)
+
+    evaluation_metrics(EVAL_TMP_SAVE_FILE_SMALL_TTT)

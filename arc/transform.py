@@ -53,6 +53,7 @@ class Reflect(Transform):
         VERTICAL = auto()
         HORIZONTAL = auto()
         DIAGONAL = auto()
+        OTHER_DIAGONAL = auto()
 
     type_: Type
 
@@ -64,6 +65,8 @@ class Reflect(Transform):
                 return np.flip(grid, 1)
             case self.Type.DIAGONAL:
                 return np.swapaxes(grid, 0, 1)
+            case self.Type.OTHER_DIAGONAL:
+                return np.rot90(np.swapaxes(grid, 0, 1), 2)
 
     @property
     def inverse(self) -> "Reflect":
@@ -116,21 +119,22 @@ class Compose(Transform):
         return Compose(list(reversed(self.transforms)))
 
 
-def generate_train_only_tasks(task: Task) -> list[Task]:
-    original_train_len = len(task.train_set)
+def create_random_transform(seed: int) -> Transform:
+    random.seed(seed)
+    return Compose(
+        transforms=[
+            Rotate(k=random.randint(0, 3)),
+            Reflect(type_=random.choice(list(Reflect.Type))),
+            PermuteColor(seed=seed),
+        ]
+    )
 
-    if original_train_len <= 1:
+
+def generate_train_only_tasks(task: Task) -> list[Task]:
+    if len(task.train_set) <= 1:
         return []
 
-    train_only_tasks = []
-    # TODO: Should we generate only one new task to avoid the test
-    # showing up in train context in other permutations?
-    # TODO: Should we shuffle train order?
-    for idx in range(original_train_len):
-        new_task_train_copy = task.train_set.copy()
-        new_test = [new_task_train_copy.pop(idx)]
-        train_only_tasks.append(
-            Task(id=None, train_set=new_task_train_copy, test_set=new_test)
-        )
+    new_train = task.train_set.copy()
+    new_test = [new_train.pop(-1)]
 
-    return train_only_tasks
+    return [Task(id=None, train_set=new_train, test_set=new_test)]

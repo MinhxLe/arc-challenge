@@ -8,6 +8,7 @@ import typing as ta
 from unsloth import FastLanguageModel
 from arc.config import FineTuningConfig
 from loguru import logger
+import os
 
 #### copied from architects, mutation everywhere
 
@@ -204,7 +205,8 @@ def get_and_fix_peft_weights(store):
 # Helper function to abstract away from of the architects' manipulations
 def load_model_tokenizer_formatter(
     fine_tuning_config: FineTuningConfig,
-    peft_trainer_checkpoint_dir: ta.Optional[str] = None,
+    initial_peft_training_checkpoint_path: ta.Optional[str] = None,
+    ttt_training_checkpoint_path: ta.Optional[str] = None,
 ) -> FastLanguageModel:
     # load base model & reduce embedding size
     model, tokenizer = FastLanguageModel.from_pretrained(
@@ -215,43 +217,75 @@ def load_model_tokenizer_formatter(
 
     model, tokenizer, formatter = preprocess_model_tokenizer_formatter(model, tokenizer)
 
-    if peft_trainer_checkpoint_dir is None:
+    if initial_peft_training_checkpoint_path is None:
         # create lora model
-        model = FastLanguageModel.get_peft_model(
-            model=model,
-            target_modules=fine_tuning_config.lora_config.target_modules,
-            r=fine_tuning_config.lora_config.lora_rank,
-            lora_alpha=fine_tuning_config.lora_config.lora_alpha,
-            lora_dropout=fine_tuning_config.lora_config.lora_dropout,
-            bias=fine_tuning_config.lora_config.bias,
-            use_gradient_checkpointing="unsloth",
-            random_state=fine_tuning_config.lora_config.random_state,
-            use_rslora=fine_tuning_config.lora_config.use_rslora,
-            loftq_config=fine_tuning_config.lora_config.loftq_config,
-        )
+        model = get_peft_model_with_lora(model, fine_tuning_config)
 
     else:
-        logger.info(f"Loading model from {peft_trainer_checkpoint_dir}")
-
-        model = peft.PeftModel.from_pretrained(
-            model=model,
-            model_id=peft_trainer_checkpoint_dir,
-            device_map="cuda",
+        logger.info(
+            f"Loading trained model from {initial_peft_training_checkpoint_path}"
+        )
+        model = _merge_model_and_peft_checkpoint(
+            model, initial_peft_training_checkpoint_path
         )
 
-        weight_set_result = peft.set_peft_model_state_dict(
-            model,
-            get_and_fix_peft_weights(peft_trainer_checkpoint_dir),
-        )
-        assert (
-            not weight_set_result.unexpected_keys
-        ), "error loading weights - some keys not available in model"
-
-        # This part of the copy/paste from architects isn't working.
-        # assert hasattr(
-        #     model, "peft_type"
-        # ), "This method is only known to work for peft models."
-
-        model = fix_dtypes(model.merge_and_unload())
+        if ttt_training_checkpoint_path is not None:
+            logger.info(f"Loading TTT weights from {ttt_training_checkpoint_path}")
+            model = _merge_model_and_peft_checkpoint(
+                model, ttt_training_checkpoint_path
+            )
 
     return model, tokenizer, formatter
+
+
+def _merge_model_and_peft_checkpoint(
+    model: FastLanguageModel, peft_checkpoint_path: str
+) -> FastLanguageModel:
+    model = peft.PeftModel.from_pretrained(
+        model=model,
+        model_id=peft_checkpoint_path,
+        device_map="cuda",
+    )
+    weight_set_result = peft.set_peft_model_state_dict(
+        model,
+        get_and_fix_peft_weights(peft_checkpoint_path),
+    )
+    assert (
+        not weight_set_result.unexpected_keys
+    ), "error loading weights - some keys not available in model"
+
+    # This part of the copy/paste from architects isn't working.
+    # assert hasattr(
+    #     model, "peft_type"
+    # ), "This method is only known to work for peft models."
+
+    model = fix_dtypes(model.merge_and_unload())
+
+    return model
+
+
+def get_peft_model_with_lora(
+    model: FastLanguageModel, fine_tuning_config: FineTuningConfig
+) -> peft.PeftModel:
+    return FastLanguageModel.get_peft_model(
+        model=model,
+        target_modules=fine_tuning_config.lora_config.target_modules,
+        r=fine_tuning_config.lora_config.lora_rank,
+        lora_alpha=fine_tuning_config.lora_config.lora_alpha,
+        lora_dropout=fine_tuning_config.lora_config.lora_dropout,
+        bias=fine_tuning_config.lora_config.bias,
+        use_gradient_checkpointing="unsloth",
+        random_state=fine_tuning_config.lora_config.random_state,
+        use_rslora=fine_tuning_config.lora_config.use_rslora,
+        loftq_config=fine_tuning_config.lora_config.loftq_config,
+    )
+
+
+def save_model_and_tokenizer(store_path, model, tokenizer):
+    model.save_pretrained(store_path)
+    tokenizer.save_pretrained(store_path)
+    to_delete = os.path.join(
+        store_path, "tokenizer.model"
+    )  # delete file, as it interferes with token removal
+    if os.path.isfile(to_delete):
+        os.remove(to_delete)
